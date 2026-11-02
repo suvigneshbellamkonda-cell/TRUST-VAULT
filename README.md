@@ -4,11 +4,18 @@ Secure document sharing where the wrong person cannot reach a document, and ever
 
 > Status: in progress. This README lists only what is actually built.
 
+## Live site
+https://trust-vault-kutu.onrender.com
+
+The free plan sleeps after 15 minutes without visitors. The first visit can take about a minute to wake up.
+
 ## What works today
-- A minimal Flask app with a home page and a /health check.
+- Live deployment on Render, connected to a Neon PostgreSQL database
+- Database tables (users, documents, grants) and five demo users
+- /health check that confirms the database is reachable
 
 ## Stack
-Python, Flask, PostgreSQL, Jinja2 templates. Tests: pytest. Hosting: Render.
+Python, Flask, PostgreSQL (Neon), Jinja2 templates. Tests: pytest. Hosting: Render.
 
 ## Roles (planned)
 - Admin: creates and disables users, sees all activity and the audit log. Cannot read document contents unless granted.
@@ -19,8 +26,10 @@ Python, Flask, PostgreSQL, Jinja2 templates. Tests: pytest. Hosting: Render.
     python -m venv .venv
     .venv\Scripts\activate
     pip install -r requirements.txt
+    python setup_db.py
     flask --app app run
 
+You need a `.env` file containing `DATABASE_URL=` followed by your own Postgres connection string.
+
 ## Unfinished
-Everything except the minimal app above.# TRUST-VAULT
-Secure document sharing platform with document-level access control and tamper-evident audit logs.
+Login, documents, permissions, the audit trail and search are not built yet.
