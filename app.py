@@ -1,5 +1,7 @@
 from flask import Flask
 
+from db import get_conn
+
 app = Flask(__name__)
 
 
@@ -10,5 +12,11 @@ def home():
 
 @app.route("/health")
 def health():
-    # Lets the hosting platform check the app is alive. Reveals nothing internal.
-    return {"status": "ok"}
+    # Lets the hosting platform check the app and database are alive.
+    # Never shows the error itself: that could leak internal details.
+    try:
+        with get_conn() as conn:
+            conn.execute("SELECT 1")
+        return {"status": "ok"}
+    except Exception:
+        return {"status": "database unavailable"}, 503
