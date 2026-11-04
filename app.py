@@ -212,7 +212,81 @@ def health():
 
 
 # ------------------------------------------------------ admin: users
-# (added in Stage B)
+
+@app.route("/admin/users")
+@login_required
+@role_required("admin")
+def admin_users():
+    with get_conn() as conn:
+        users = conn.execute(
+            "SELECT id, username, full_name, role, is_active, created_at "
+            "FROM users ORDER BY id"
+        ).fetchall()
+    return render_template("admin_users.html", users=users, roles=ROLES)
+
+
+@app.route("/admin/users", methods=["POST"])
+@login_required
+@role_required("admin")
+def create_user():
+    # Only these four fields are read from the form. Anything else the
+    # browser sends is ignored.
+    username = request.form.get("username", "").strip().lower()
+    full_name = request.form.get("full_name", "").strip()
+    role = request.form.get("role", "")
+    password = request.form.get("password", "")
+
+    problem = None
+    if not USERNAME_RE.match(username):
+        problem = "Username must be 3-30 characters: a-z, 0-9 and underscore."
+    elif not 1 <= len(full_name) <= 80:
+        problem = "Full name must be 1-80 characters."
+    elif role not in ROLES:
+        problem = "Choose a valid role."
+    elif not 10 <= len(password) <= 200:
+        problem = "Password must be at least 10 characters."
+
+    if problem is None:
+        try:
+            with get_conn() as conn:
+                conn.execute(
+                    "INSERT INTO users (username, full_name, password_hash, role) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (username, full_name, generate_password_hash(password), role),
+                )
+            flash(f"User {username} created.", "ok")
+        except psycopg.errors.UniqueViolation:
+            problem = "That username is already taken."
+
+    if problem:
+        flash(problem, "error")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/toggle", methods=["POST"])
+@login_required
+@role_required("admin")
+def toggle_user(user_id):
+    if user_id == g.user["id"]:
+        flash("You cannot disable your own account.", "error")
+        return redirect(url_for("admin_users"))
+
+    with get_conn() as conn:
+        # Flips active/disabled. Bumping session_version also kills any login
+        # cookie the user already holds, so re-enabling later does not bring
+        # an old cookie back to life.
+        row = conn.execute(
+            "UPDATE users SET is_active = NOT is_active, "
+            "session_version = session_version + 1 "
+            "WHERE id = %s RETURNING username, is_active",
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        abort(404)
+
+    state = "enabled" if row["is_active"] else "disabled"
+    flash(f"User {row['username']} {state}.", "ok")
+    return redirect(url_for("admin_users"))
 
 
 # ---------------------------------------------- headers and error pages
