@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Home - TrustVault{% endblock %}
+{% block content %}
+<h1>Welcome, {{ g.user.full_name }}</h1>
+{% if g.user.role == 'admin' %}
+  <p>You are an <strong>administrator</strong>. You manage users and review activity. You cannot read document contents unless an owner grants you access.</p>
+{% elif g.user.role == 'owner' %}
+  <p>You are a document <strong>owner</strong>. You will upload documents and decide who can read or edit them.</p>
+{% else %}
+  <p>You are a <strong>viewer</strong>. You will see only the documents that have been shared with you.</p>
+{% endif %}
+<p class="muted">Documents are coming next.</p>
+{% endblock %}

@@ -46,3 +46,21 @@ CREATE TABLE IF NOT EXISTS grants (
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_grant_per_user
     ON grants (document_id, user_id)
     WHERE revoked_at IS NULL;
+
+-- ---- Added on Day 2 (login) ----
+
+-- Bumped whenever a user logs out or is disabled. A login cookie carries the
+-- number it was issued with, so bumping it kills every cookie issued before.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0;
+
+-- Every login attempt, good or bad. Used to lock out password guessing.
+CREATE TABLE IF NOT EXISTS login_attempts (
+    id           SERIAL PRIMARY KEY,
+    username     TEXT NOT NULL,
+    ip           TEXT NOT NULL,
+    success      BOOLEAN NOT NULL,
+    attempted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS login_attempts_by_user ON login_attempts (username, attempted_at);
+CREATE INDEX IF NOT EXISTS login_attempts_by_ip ON login_attempts (ip, attempted_at); 

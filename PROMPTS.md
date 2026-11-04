@@ -12,4 +12,4 @@ I paste SECURITY_RULES.md at the start of every AI session.
 - **What it produced:** A plan to host the Postgres database on Render alongside the app.
 - **What was wrong, specifically:** Render's free databases expire after 30 days and are then deleted. That could happen before the evaluators or interviewers look at it, and I would lose all the demo data.
 - **How I noticed:** Before writing the setup, the AI checked Render's documentation and found the expiry rule, and told me.
-- **What I did instead:** Put the database on Neon (free plan, no expiry) and kept only the app on Render. Commit: LINK-TO-ADD-LATER
+- **What I did instead:** Put the database on Neon (free plan, no expiry) and kept only the app on Render. Commit: https://github.com/suvigneshbellamkonda-cell/TRUST-VAULT/commit/764be3a

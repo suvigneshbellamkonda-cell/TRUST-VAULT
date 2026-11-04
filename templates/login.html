@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Log in - TrustVault{% endblock %}
+{% block content %}
+<h1>Log in</h1>
+<form method="post" action="{{ url_for('login') }}" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Username
+    <input type="text" name="username" autocomplete="username" required maxlength="50" autofocus>
+  </label>
+  <label>Password
+    <input type="password" name="password" autocomplete="current-password" required maxlength="200">
+  </label>
+  <button type="submit">Log in</button>
+</form>
+{% endblock %}

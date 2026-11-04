@@ -1,0 +1,20 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, Arial, sans-serif; background: #f4f5f7; color: #1d2330; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #1d2330; color: #fff; }
+header a { color: #fff; text-decoration: none; }
+.brand { font-weight: 700; font-size: 1.2rem; }
+nav { display: flex; gap: 16px; align-items: center; }
+main { max-width: 760px; margin: 24px auto; padding: 0 16px; }
+.card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.12); margin-bottom: 20px; }
+label { display: block; margin-bottom: 12px; font-weight: 600; }
+input[type=text], input[type=password], select { display: block; width: 100%; margin-top: 4px; padding: 8px; font-size: 1rem; border: 1px solid #b8bec9; border-radius: 4px; }
+button { padding: 8px 16px; font-size: 1rem; border: 0; border-radius: 4px; background: #2b59c3; color: #fff; cursor: pointer; }
+button.link { background: none; padding: 0; text-decoration: underline; color: #fff; }
+button.danger { background: #b3261e; }
+form.inline { display: inline; margin: 0; }
+.flash { padding: 10px 12px; border-radius: 4px; }
+.flash.error { background: #fde7e5; color: #8a1c14; }
+.flash.ok { background: #e3f4e6; color: #17602a; }
+table { width: 100%; border-collapse: collapse; background: #fff; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e0e3e8; }
+.muted { color: #667085; }
