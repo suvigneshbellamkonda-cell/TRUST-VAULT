@@ -1,8 +1,10 @@
 {% extends "base.html" %}
+{% from "_macros.html" import person %}
 {% block title %}{{ doc.title }} - TrustVault{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
+    <a class="backlink" href="{{ url_for('documents.list_documents') }}">&larr; Documents</a>
     <h1>{{ doc.title }}</h1>
     <p>{{ doc.category }} · <span class="badge badge-{{ doc.access }}">{{ doc.access }}</span></p>
   </div>
@@ -20,7 +22,7 @@
     <div><dt>Your access</dt><dd>{{ doc.access }}</dd></div>
     <div><dt>Uploaded (UTC)</dt><dd>{{ doc.created_at.strftime('%Y-%m-%d %H:%M') }}</dd></div>
   </dl>
-  <p class="hash">SHA-256 <span>{{ doc.sha256 }}</span></p>
+  <p class="hash">File fingerprint (SHA-256): <span>{{ doc.sha256 }}</span></p>
 </section>
 
 {% if can_edit %}
@@ -52,13 +54,13 @@
     <tr><th>User</th><th>Access</th><th>Since (UTC)</th><th></th></tr>
     {% for gr in grants %}
     <tr>
-      <td>{{ gr.full_name }} <span class="muted">({{ gr.username }})</span></td>
+      <td>{{ person(gr.full_name, True) }} <span class="muted">({{ gr.username }})</span></td>
       <td><span class="badge badge-{{ gr.permission }}">{{ gr.permission }}</span></td>
       <td>{{ gr.granted_at.strftime('%Y-%m-%d %H:%M') }}</td>
       <td>
         <form method="post" action="{{ url_for('documents.revoke_grant', doc_id=doc.id, grant_id=gr.id) }}" class="inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="danger small">Remove access</button>
+          <button type="submit" class="danger outline small">Remove access</button>
         </form>
       </td>
     </tr>

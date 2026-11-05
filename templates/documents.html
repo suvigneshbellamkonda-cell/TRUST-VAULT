@@ -24,11 +24,11 @@
   <label>Owner
     <input type="text" name="owner" value="{{ owner }}" maxlength="80">
   </label>
-  <label>Uploaded from (YYYY-MM-DD)
-    <input type="text" name="date_from" value="{{ date_from }}" maxlength="10" placeholder="2026-11-01">
+  <label>Uploaded from
+    <input type="text" name="date_from" value="{{ date_from }}" maxlength="10" placeholder="YYYY-MM-DD">
   </label>
-  <label>Uploaded to (YYYY-MM-DD)
-    <input type="text" name="date_to" value="{{ date_to }}" maxlength="10" placeholder="2026-11-30">
+  <label>Uploaded to
+    <input type="text" name="date_to" value="{{ date_to }}" maxlength="10" placeholder="YYYY-MM-DD">
   </label>
   <div class="filter-actions">
     <button type="submit">Search</button>
@@ -37,20 +37,20 @@
 </form>
 
 {% if docs %}
-<div class="table-wrap">
-<table>
-  <tr><th>Title</th><th>Category</th><th>Owner</th><th>Your access</th><th class="num">Size</th><th>Uploaded (UTC)</th></tr>
+<div class="doc-grid">
   {% for d in docs %}
-  <tr>
-    <td class="doc-title"><a href="{{ url_for('documents.view_document', doc_id=d.id) }}">{{ d.title }}</a></td>
-    <td>{{ d.category }}</td>
-    <td>{{ d.owner_name }}</td>
-    <td><span class="badge badge-{{ d.access }}">{{ d.access }}</span></td>
-    <td class="num">{{ d.size_bytes|filesizeformat }}</td>
-    <td>{{ d.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-  </tr>
+  <article class="doc-card">
+    <div class="doc-card-top">
+      <span class="doc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg></span>
+      <span class="badge badge-{{ d.access }}">{{ d.access }}</span>
+    </div>
+    <div>
+      <h2><a href="{{ url_for('documents.view_document', doc_id=d.id) }}">{{ d.title }}</a></h2>
+      <div class="meta">{{ d.category }} · {{ d.owner_name }}</div>
+    </div>
+    <div class="foot">Uploaded {{ d.created_at.strftime('%Y-%m-%d %H:%M') }} UTC · {{ d.size_bytes|filesizeformat }}</div>
+  </article>
   {% endfor %}
-</table>
 </div>
 {% elif searching %}
   <div class="empty">No documents you can open match that search. Try fewer words or clear the search.</div>

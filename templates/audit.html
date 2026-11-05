@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import person %}
 {% block title %}Audit trail - TrustVault{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -35,12 +36,12 @@
 {% if rows %}
 <div class="table-wrap">
 <table>
-  <tr><th class="num">#</th><th>Time (UTC)</th><th>Who</th><th>Action</th><th>Result</th><th>Doc</th><th>IP</th><th>Detail</th></tr>
+  <tr><th class="num">No.</th><th>Time (UTC)</th><th>User</th><th>Action</th><th>Result</th><th>Doc</th><th>IP</th><th>Detail</th></tr>
   {% for r in rows %}
   <tr class="row-{{ r.outcome }}">
     <td class="num">{{ r.id }}</td>
     <td>{{ r.at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-    <td>{{ r.actor_username or '-' }}</td>
+    <td>{% if r.actor_username %}{{ person(r.actor_username, True) }}{% else %}-{% endif %}</td>
     <td>{{ r.action }}</td>
     <td><span class="badge badge-{{ r.outcome }}">{{ r.outcome }}</span></td>
     <td>{{ r.document_id or '-' }}</td>

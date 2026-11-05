@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import person %}
 {% block title %}Users - TrustVault{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -13,7 +14,7 @@
   <tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th></th></tr>
   {% for u in users %}
   <tr>
-    <td><strong>{{ u.username }}</strong></td>
+    <td>{{ person(u.username, True) }}</td>
     <td>{{ u.full_name }}</td>
     <td>{{ u.role }}</td>
     <td><span class="badge badge-{{ 'active' if u.is_active else 'disabled' }}">{{ 'active' if u.is_active else 'disabled' }}</span></td>
@@ -21,7 +22,7 @@
       {% if u.id != g.user.id %}
       <form method="post" action="{{ url_for('toggle_user', user_id=u.id) }}" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="small {{ 'danger' if u.is_active else 'secondary' }}">
+        <button type="submit" class="small {{ 'danger outline' if u.is_active else 'secondary' }}">
           {{ 'Disable' if u.is_active else 'Enable' }}
         </button>
       </form>

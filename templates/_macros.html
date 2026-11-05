@@ -1,0 +1,8 @@
+{# Small pieces used on several pages. #}
+{% macro user_icon() -%}
+<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c0-4.6 3.8-7.4 8.5-7.4s8.5 2.8 8.5 7.4z"/></svg>
+{%- endmacro %}
+
+{% macro person(name, small=False) -%}
+<span class="person"><span class="avatar light{{ ' small' if small }}">{{ user_icon() }}</span>{{ name }}</span>
+{%- endmacro %}

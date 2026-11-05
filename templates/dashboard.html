@@ -1,46 +1,41 @@
 {% extends "base.html" %}
 {% block title %}Overview - TrustVault{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>Welcome, {{ g.user.full_name }}</h1>
-    <p>You are signed in as {% if g.user.role == 'admin' %}an <strong>administrator</strong>{% elif g.user.role == 'owner' %}a document <strong>owner</strong>{% else %}a <strong>viewer</strong>{% endif %}.</p>
-  </div>
-  <a class="button" href="{{ url_for('documents.list_documents') }}">Go to your documents</a>
+<div class="welcome">
+  <h1>Welcome, {{ g.user.full_name }}</h1>
+  <p>What would you like to do?</p>
 </div>
 
-<div class="role-lists">
-  <section class="panel">
-    <h2>What you can do</h2>
-    <ul>
-    {% if g.user.role == 'admin' %}
-      <li>Create users and switch accounts off or on</li>
-      <li>Review the audit trail of document activity and permission changes</li>
-      <li>Check that no audit entry has been altered or removed</li>
-    {% elif g.user.role == 'owner' %}
-      <li>Upload documents</li>
-      <li>Give named people read or edit access, and take it back at any time</li>
-      <li>Rename, recategorise or delete your own documents</li>
-    {% else %}
-      <li>Open and download the documents that have been shared with you</li>
-      <li>Edit the details of a document only if its owner gave you edit access</li>
-    {% endif %}
-    </ul>
+<div class="big-actions">
+  <section class="big-action">
+    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg></div>
+    <h2>Open my documents</h2>
+    <p>Search, open and download the documents you own or that were shared with you.</p>
+    <div><a class="button" href="{{ url_for('documents.list_documents') }}">Documents</a></div>
   </section>
-  <section class="panel">
-    <h2>What you cannot do</h2>
-    <ul>
-    {% if g.user.role == 'admin' %}
-      <li>Open any document, unless its owner gives you access like anyone else</li>
-      <li>Upload documents or change who has access to them</li>
-    {% elif g.user.role == 'owner' %}
-      <li>See documents owned by other people unless they share them with you</li>
-      <li>See the audit trail or manage users</li>
-    {% else %}
-      <li>Upload documents, share them or delete them</li>
-      <li>See documents that were not shared with you</li>
-    {% endif %}
-    </ul>
+
+  {% if g.user.role == 'owner' %}
+  <section class="big-action">
+    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg></div>
+    <h2>Upload a document</h2>
+    <p>Add a new file. Only you can open it until you give someone access.</p>
+    <div><a class="button secondary" href="{{ url_for('documents.upload_form') }}">Upload</a></div>
   </section>
+  {% endif %}
+
+  {% if g.user.role == 'admin' %}
+  <section class="big-action">
+    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M17 5v6M14 8h6"/></svg></div>
+    <h2>Manage users</h2>
+    <p>Create accounts and switch them off or on.</p>
+    <div><a class="button secondary" href="{{ url_for('admin_users') }}">Users</a></div>
+  </section>
+  <section class="big-action">
+    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+    <h2>Read the audit trail</h2>
+    <p>See every action and every refused attempt, and check that nothing was altered.</p>
+    <div><a class="button secondary" href="{{ url_for('admin_audit.audit_view') }}">Audit trail</a></div>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}
