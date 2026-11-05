@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.title }} - TrustVault{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ doc.title }}</h1>
+    <p>{{ doc.category }} · <span class="badge badge-{{ doc.access }}">{{ doc.access }}</span></p>
+  </div>
+  <div>
+    <a class="button" href="{{ url_for('documents.download', doc_id=doc.id) }}">Download</a>
+    <a class="button secondary" href="{{ url_for('documents.list_documents') }}">Back to documents</a>
+  </div>
+</div>
+
+<section class="panel">
+  <h2>Details</h2>
+  <dl class="facts">
+    <div><dt>Category</dt><dd>{{ doc.category }}</dd></div>
+    <div><dt>File</dt><dd>{{ doc.filename }} ({{ doc.size_bytes|filesizeformat }})</dd></div>
+    <div><dt>Your access</dt><dd>{{ doc.access }}</dd></div>
+    <div><dt>Uploaded (UTC)</dt><dd>{{ doc.created_at.strftime('%Y-%m-%d %H:%M') }}</dd></div>
+  </dl>
+  <p class="hash">SHA-256 <span>{{ doc.sha256 }}</span></p>
+</section>
+
+{% if can_edit %}
+<section class="panel">
+  <h2>Edit details</h2>
+  <form method="post" action="{{ url_for('documents.edit', doc_id=doc.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-grid">
+      <label>Title
+        <input type="text" name="title" value="{{ doc.title }}" required maxlength="120">
+      </label>
+      <label>Category
+        <select name="category" required>
+          {% for c in categories %}<option value="{{ c }}" {{ 'selected' if c == doc.category }}>{{ c }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <button type="submit">Save changes</button>
+  </form>
+</section>
+{% endif %}
+
+{% if can_share %}
+<section class="panel">
+  <h2>Who has access</h2>
+  {% if grants %}
+  <div class="table-wrap">
+  <table>
+    <tr><th>User</th><th>Access</th><th>Since (UTC)</th><th></th></tr>
+    {% for gr in grants %}
+    <tr>
+      <td>{{ gr.full_name }} <span class="muted">({{ gr.username }})</span></td>
+      <td><span class="badge badge-{{ gr.permission }}">{{ gr.permission }}</span></td>
+      <td>{{ gr.granted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>
+        <form method="post" action="{{ url_for('documents.revoke_grant', doc_id=doc.id, grant_id=gr.id) }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="danger small">Remove access</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% else %}
+    <p class="muted">Only you can open this document.</p>
+  {% endif %}
+
+  <h2 style="margin-top:22px">Give access</h2>
+  <form method="post" action="{{ url_for('documents.add_grant', doc_id=doc.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-grid">
+      <label>Username
+        <input type="text" name="username" required maxlength="50">
+      </label>
+      <label>Access
+        <select name="permission" required>
+          <option value="read">read (view and download)</option>
+          <option value="edit">edit (read, plus change title and category)</option>
+        </select>
+      </label>
+    </div>
+    <button type="submit">Give access</button>
+  </form>
+</section>
+{% endif %}
+
+{% if can_delete %}
+<section class="panel danger-zone">
+  <h2>Delete</h2>
+  <p class="muted">The document disappears for everyone straight away. The deletion is recorded in the audit trail.</p>
+  <form method="post" action="{{ url_for('documents.delete', doc_id=doc.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="check"><input type="checkbox" name="confirm" required> <span>I want to delete this document for everyone</span></label>
+    <button type="submit" class="danger">Delete document</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

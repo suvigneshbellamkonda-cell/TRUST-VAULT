@@ -2,7 +2,8 @@
 {% block title %}Log in - TrustVault{% endblock %}
 {% block content %}
 <h1>Log in</h1>
-<form method="post" action="{{ url_for('login') }}" class="card">
+<p class="muted">Accounts are created by an administrator.</p>
+<form method="post" action="{{ url_for('login') }}" class="card" style="margin-top:20px">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Username
     <input type="text" name="username" autocomplete="username" required maxlength="50" autofocus>

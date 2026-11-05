@@ -1,21 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Users - TrustVault{% endblock %}
 {% block content %}
-<h1>Users</h1>
+<div class="page-head">
+  <div>
+    <h1>Users</h1>
+    <p>Only an administrator can create accounts. Switching an account off ends its sessions at once.</p>
+  </div>
+</div>
 
+<div class="table-wrap">
 <table>
   <tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th></th></tr>
   {% for u in users %}
   <tr>
-    <td>{{ u.username }}</td>
+    <td><strong>{{ u.username }}</strong></td>
     <td>{{ u.full_name }}</td>
     <td>{{ u.role }}</td>
-    <td>{{ 'active' if u.is_active else 'disabled' }}</td>
+    <td><span class="badge badge-{{ 'active' if u.is_active else 'disabled' }}">{{ 'active' if u.is_active else 'disabled' }}</span></td>
     <td>
       {% if u.id != g.user.id %}
       <form method="post" action="{{ url_for('toggle_user', user_id=u.id) }}" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="{{ 'danger' if u.is_active else '' }}">
+        <button type="submit" class="small {{ 'danger' if u.is_active else 'secondary' }}">
           {{ 'Disable' if u.is_active else 'Enable' }}
         </button>
       </form>
@@ -24,24 +30,29 @@
   </tr>
   {% endfor %}
 </table>
+</div>
 
-<h2>Create a user</h2>
-<form method="post" action="{{ url_for('create_user') }}" class="card">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <label>Username
-    <input type="text" name="username" required minlength="3" maxlength="30">
-  </label>
-  <label>Full name
-    <input type="text" name="full_name" required maxlength="80">
-  </label>
-  <label>Role
-    <select name="role" required>
-      {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
-    </select>
-  </label>
-  <label>Password (at least 10 characters)
-    <input type="password" name="password" required minlength="10" maxlength="200" autocomplete="new-password">
-  </label>
-  <button type="submit">Create user</button>
-</form>
+<section class="panel">
+  <h2>Create a user</h2>
+  <form method="post" action="{{ url_for('create_user') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-grid">
+      <label>Username
+        <input type="text" name="username" required minlength="3" maxlength="30">
+      </label>
+      <label>Full name
+        <input type="text" name="full_name" required maxlength="80">
+      </label>
+      <label>Role
+        <select name="role" required>
+          {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Password (at least 10 characters)
+        <input type="password" name="password" required minlength="10" maxlength="200" autocomplete="new-password">
+      </label>
+    </div>
+    <button type="submit">Create user</button>
+  </form>
+</section>
 {% endblock %}

@@ -4,22 +4,44 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}TrustVault{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <header>
-    <a class="brand" href="{{ url_for('home') }}">TrustVault</a>
-    {% if g.user %}
-    <nav>
-      {% if g.user.role == 'admin' %}<a href="{{ url_for('admin_users') }}">Users</a>{% endif %}
-      <span>{{ g.user.full_name }} ({{ g.user.role }})</span>
+{% set seal %}<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 5 6v8c0 7.2 4.6 13.4 11 16 6.4-2.6 11-8.8 11-16V6z" fill="#1d6b73"/><circle cx="16" cy="13.5" r="3.2" fill="#fff"/><path d="M14.6 16h2.8l1 7h-4.8z" fill="#fff"/></svg>{% endset %}
+<div class="layout {{ 'layout-shell' if g.user else 'layout-auth' }}">
+  {% if g.user %}
+  <aside class="sidebar">
+    <a class="brand" href="{{ url_for('home') }}">{{ seal }}<span>TrustVault</span></a>
+    <nav aria-label="Main">
+      <a href="{{ url_for('home') }}" class="{{ 'active' if request.endpoint == 'home' }}">Overview</a>
+      <a href="{{ url_for('documents.list_documents') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('documents.') }}">Documents</a>
+      {% if g.user.role == 'admin' %}
+      <a href="{{ url_for('admin_users') }}" class="{{ 'active' if request.endpoint in ('admin_users', 'create_user', 'toggle_user') }}">Users</a>
+      <a href="{{ url_for('admin_audit.audit_view') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin_audit.') }}">Audit trail</a>
+      {% endif %}
+    </nav>
+    <div class="who">
+      <div class="who-name">{{ g.user.full_name }}</div>
+      <span class="role">{{ g.user.role }}</span>
       <form method="post" action="{{ url_for('logout') }}" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="link">Log out</button>
       </form>
-    </nav>
-    {% endif %}
-  </header>
+    </div>
+  </aside>
+  {% else %}
+  <section class="auth-brand">
+    <div class="brand">{{ seal }}<span>TrustVault</span></div>
+    <h2>Share documents. Know exactly who opened them.</h2>
+    <p>A document reaches only the people it was shared with, and every attempt to reach it is recorded.</p>
+    <ul>
+      <li>Access is granted per document, to named people</li>
+      <li>Taking access away works immediately</li>
+      <li>Refused attempts are recorded as well as successful ones</li>
+    </ul>
+  </section>
+  {% endif %}
   <main>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}
@@ -28,5 +50,6 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+</div>
 </body>
 </html>

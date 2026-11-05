@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Audit trail - TrustVault{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Audit trail</h1>
+    <p>Every action and every refused attempt. Entries cannot be changed or removed, and each one is chained to the one before it.</p>
+  </div>
+  <form method="post" action="{{ url_for('admin_audit.audit_verify') }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit">Check the chain now</button>
+  </form>
+</div>
+
+<form method="get" action="{{ url_for('admin_audit.audit_view') }}" class="card filters">
+  <label>Action
+    <select name="action">
+      <option value="">All</option>
+      {% for a in actions %}<option value="{{ a }}" {{ 'selected' if a == action }}>{{ a }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Result
+    <select name="outcome">
+      <option value="">All</option>
+      <option value="ok" {{ 'selected' if outcome == 'ok' }}>ok</option>
+      <option value="denied" {{ 'selected' if outcome == 'denied' }}>denied</option>
+    </select>
+  </label>
+  <label>Username
+    <input type="text" name="username" value="{{ username }}" maxlength="50">
+  </label>
+  <div class="filter-actions"><button type="submit">Filter</button></div>
+</form>
+
+{% if rows %}
+<div class="table-wrap">
+<table>
+  <tr><th class="num">#</th><th>Time (UTC)</th><th>Who</th><th>Action</th><th>Result</th><th>Doc</th><th>IP</th><th>Detail</th></tr>
+  {% for r in rows %}
+  <tr class="row-{{ r.outcome }}">
+    <td class="num">{{ r.id }}</td>
+    <td>{{ r.at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+    <td>{{ r.actor_username or '-' }}</td>
+    <td>{{ r.action }}</td>
+    <td><span class="badge badge-{{ r.outcome }}">{{ r.outcome }}</span></td>
+    <td>{{ r.document_id or '-' }}</td>
+    <td>{{ r.ip or '-' }}</td>
+    <td class="detail" title="{{ r.detail or '' }}">{{ (r.detail or '')[:80] }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p class="pager">
+  {% if page > 1 %}<a href="{{ url_for('admin_audit.audit_view', action=action, outcome=outcome, username=username, page=page-1) }}">Newer entries</a>{% endif %}
+  {% if has_next %}<a href="{{ url_for('admin_audit.audit_view', action=action, outcome=outcome, username=username, page=page+1) }}">Older entries</a>{% endif %}
+</p>
+{% else %}
+  <div class="empty">No entries match those filters.</div>
+{% endif %}
+{% endblock %}

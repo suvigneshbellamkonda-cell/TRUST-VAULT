@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Documents - TrustVault{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Documents</h1>
+    <p>Only documents you own or that were shared with you appear here.</p>
+  </div>
+  {% if g.user.role == 'owner' %}
+    <a class="button" href="{{ url_for('documents.upload_form') }}">Upload a document</a>
+  {% endif %}
+</div>
+
+<form method="get" action="{{ url_for('documents.list_documents') }}" class="card filters">
+  <label>Title contains
+    <input type="text" name="title" value="{{ title }}" maxlength="120">
+  </label>
+  <label>Category
+    <select name="category">
+      <option value="">All</option>
+      {% for c in categories %}<option value="{{ c }}" {{ 'selected' if c == category }}>{{ c }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Owner
+    <input type="text" name="owner" value="{{ owner }}" maxlength="80">
+  </label>
+  <label>Uploaded from (YYYY-MM-DD)
+    <input type="text" name="date_from" value="{{ date_from }}" maxlength="10" placeholder="2026-11-01">
+  </label>
+  <label>Uploaded to (YYYY-MM-DD)
+    <input type="text" name="date_to" value="{{ date_to }}" maxlength="10" placeholder="2026-11-30">
+  </label>
+  <div class="filter-actions">
+    <button type="submit">Search</button>
+    {% if searching %}<a href="{{ url_for('documents.list_documents') }}">Clear search</a>{% endif %}
+  </div>
+</form>
+
+{% if docs %}
+<div class="table-wrap">
+<table>
+  <tr><th>Title</th><th>Category</th><th>Owner</th><th>Your access</th><th class="num">Size</th><th>Uploaded (UTC)</th></tr>
+  {% for d in docs %}
+  <tr>
+    <td class="doc-title"><a href="{{ url_for('documents.view_document', doc_id=d.id) }}">{{ d.title }}</a></td>
+    <td>{{ d.category }}</td>
+    <td>{{ d.owner_name }}</td>
+    <td><span class="badge badge-{{ d.access }}">{{ d.access }}</span></td>
+    <td class="num">{{ d.size_bytes|filesizeformat }}</td>
+    <td>{{ d.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% elif searching %}
+  <div class="empty">No documents you can open match that search. Try fewer words or clear the search.</div>
+{% else %}
+  <div class="empty">You have no documents yet. Documents appear here when you upload them or when an owner shares one with you.</div>
+{% endif %}
+{% endblock %}

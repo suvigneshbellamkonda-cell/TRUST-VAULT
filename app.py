@@ -1,8 +1,6 @@
 import os
 import re
-import secrets
 from datetime import timedelta
-from functools import wraps
 
 import psycopg
 from flask import (Flask, abort, flash, g, redirect, render_template,
@@ -10,7 +8,11 @@ from flask import (Flask, abort, flash, g, redirect, render_template,
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import audit
+from admin_audit import bp as admin_audit_bp
 from db import get_conn  # importing db also loads the .env file
+from documents import bp as documents_bp
+from security import check_csrf, csrf_token, login_required, role_required
 
 app = Flask(__name__)
 
@@ -22,11 +24,16 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",   # browser does not send it on cross-site POSTs
     SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),  # https only on Render
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+    MAX_CONTENT_LENGTH=11 * 1024 * 1024,  # refuse any request over 11 MB
 )
 
 # Render puts a proxy in front of the app. This makes request.remote_addr the
 # real visitor address (the last entry the proxy added), not the proxy's.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+app.jinja_env.globals["csrf_token"] = csrf_token
+app.register_blueprint(documents_bp)
+app.register_blueprint(admin_audit_bp)
 
 ROLES = ("admin", "owner", "viewer")
 USERNAME_RE = re.compile(r"^[a-z0-9_]{3,30}$")
@@ -38,25 +45,6 @@ LOCKOUT_MINUTES = 15
 # Used so a login for a username that does not exist takes as long as one that
 # does. Otherwise response time would reveal which usernames are real.
 DUMMY_HASH = generate_password_hash("not-a-real-password")
-
-
-# ---------------------------------------------------------------- CSRF
-
-def csrf_token():
-    """The secret value every form must send back with a POST."""
-    if "csrf" not in session:
-        session["csrf"] = secrets.token_hex(16)
-    return session["csrf"]
-
-
-app.jinja_env.globals["csrf_token"] = csrf_token
-
-
-def check_csrf():
-    sent = request.form.get("csrf_token", "").encode()
-    expected = session.get("csrf", "").encode()
-    if not expected or not secrets.compare_digest(sent, expected):
-        abort(400)
 
 
 # ------------------------------------------------- who is the visitor?
@@ -91,28 +79,6 @@ def load_user():
         check_csrf()
 
 
-def login_required(view):
-    @wraps(view)
-    def wrapper(*args, **kwargs):
-        if g.user is None:
-            return redirect(url_for("login"))
-        return view(*args, **kwargs)
-    return wrapper
-
-
-def role_required(*allowed_roles):
-    """Use AFTER login_required. Answers 404 (not 403) so a visitor cannot
-    even tell the page exists."""
-    def decorator(view):
-        @wraps(view)
-        def wrapper(*args, **kwargs):
-            if g.user["role"] not in allowed_roles:
-                abort(404)
-            return view(*args, **kwargs)
-        return wrapper
-    return decorator
-
-
 # ------------------------------------------------------------- login
 
 def too_many_failures(conn, username, ip):
@@ -145,6 +111,8 @@ def login():
         # Locked out? Checked BEFORE the password, so a correct guess
         # during a lockout is still refused.
         if too_many_failures(conn, username, ip):
+            audit.record(conn, "login.locked", outcome="denied",
+                         actor_username=username, detail="too many failures")
             flash("Too many failed attempts. Try again in 15 minutes.", "error")
             return render_template("login.html"), 429
 
@@ -162,6 +130,13 @@ def login():
         conn.execute(
             "INSERT INTO login_attempts (username, ip, success) VALUES (%s, %s, %s)",
             (username, ip, success),
+        )
+        audit.record(
+            conn,
+            "login.ok" if success else "login.fail",
+            outcome="ok" if success else "denied",
+            actor_id=user["id"] if success else None,
+            actor_username=username,
         )
 
     if not success:
@@ -187,6 +162,7 @@ def logout():
             "UPDATE users SET session_version = session_version + 1 WHERE id = %s",
             (g.user["id"],),
         )
+        audit.record(conn, "logout")
     session.clear()
     return redirect(url_for("login"))
 
@@ -249,11 +225,13 @@ def create_user():
     if problem is None:
         try:
             with get_conn() as conn:
-                conn.execute(
+                new_user = conn.execute(
                     "INSERT INTO users (username, full_name, password_hash, role) "
-                    "VALUES (%s, %s, %s, %s)",
+                    "VALUES (%s, %s, %s, %s) RETURNING id",
                     (username, full_name, generate_password_hash(password), role),
-                )
+                ).fetchone()
+                audit.record(conn, "user.create", target_user_id=new_user["id"],
+                             detail=f"username={username} role={role}")
             flash(f"User {username} created.", "ok")
         except psycopg.errors.UniqueViolation:
             problem = "That username is already taken."
@@ -268,6 +246,9 @@ def create_user():
 @role_required("admin")
 def toggle_user(user_id):
     if user_id == g.user["id"]:
+        with get_conn() as conn:
+            audit.record(conn, "user.disable", outcome="denied",
+                         target_user_id=user_id, detail="cannot disable yourself")
         flash("You cannot disable your own account.", "error")
         return redirect(url_for("admin_users"))
 
@@ -281,6 +262,13 @@ def toggle_user(user_id):
             "WHERE id = %s RETURNING username, is_active",
             (user_id,),
         ).fetchone()
+        if row is not None:
+            audit.record(
+                conn,
+                "user.enable" if row["is_active"] else "user.disable",
+                target_user_id=user_id,
+                detail=f"username={row['username']}",
+            )
     if row is None:
         abort(404)
 
@@ -296,8 +284,11 @@ def add_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; frame-ancestors 'none'; form-action 'self'"
+    # setdefault: a route may set a stricter policy of its own (downloads do),
+    # and this must not overwrite it.
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; frame-ancestors 'none'; form-action 'self'",
     )
     if os.environ.get("RENDER"):
         response.headers["Strict-Transport-Security"] = "max-age=31536000"
@@ -308,9 +299,15 @@ def add_security_headers(response):
 
 @app.errorhandler(400)
 @app.errorhandler(404)
+@app.errorhandler(413)
 @app.errorhandler(500)
 def error_page(error):
     code = getattr(error, "code", 500)
-    messages = {400: "Bad request.", 404: "Page not found.", 500: "Something went wrong."}
+    messages = {
+        400: "Bad request.",
+        404: "Page not found.",
+        413: "That upload is too large (the limit is 10 MB).",
+        500: "Something went wrong.",
+    }
     # Never show the real error text or a stack trace to visitors.
     return render_template("error.html", code=code, message=messages.get(code, "Error.")), code

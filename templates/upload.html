@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Upload - TrustVault{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Upload a document</h1>
+    <p>Only you can open it until you give someone access.</p>
+  </div>
+  <a class="button secondary" href="{{ url_for('documents.list_documents') }}">Back to documents</a>
+</div>
+<form method="post" action="{{ url_for('documents.upload') }}" enctype="multipart/form-data" class="card" style="max-width:640px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Title
+    <input type="text" name="title" required maxlength="120">
+  </label>
+  <label>Category
+    <select name="category" required>
+      {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>File (pdf, png, jpg, txt, csv, docx or xlsx, up to 10 MB)
+    <input type="file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.txt,.csv,.docx,.xlsx">
+  </label>
+  <button type="submit">Upload</button>
+</form>
+{% endblock %}

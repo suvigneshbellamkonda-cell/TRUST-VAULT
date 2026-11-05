@@ -64,3 +64,46 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 
 CREATE INDEX IF NOT EXISTS login_attempts_by_user ON login_attempts (username, attempted_at);
 CREATE INDEX IF NOT EXISTS login_attempts_by_ip ON login_attempts (ip, attempted_at); 
+
+-- ---- Added on Day 3 (documents and audit log) ----
+
+CREATE INDEX IF NOT EXISTS documents_by_owner ON documents (owner_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS grants_by_user ON grants (user_id) WHERE revoked_at IS NULL;
+
+-- The audit trail. Rows are only ever added. Each row stores a hash of the
+-- row before it, so removing or changing an old row breaks the chain.
+-- document_id and target_user_id have no foreign key on purpose: attempts on
+-- ids that do not exist must still be recorded.
+CREATE TABLE IF NOT EXISTS audit_log (
+    id             BIGSERIAL PRIMARY KEY,
+    at             TIMESTAMPTZ NOT NULL,
+    actor_id       INTEGER,
+    actor_username TEXT,
+    action         TEXT NOT NULL,
+    document_id    INTEGER,
+    target_user_id INTEGER,
+    outcome        TEXT NOT NULL CHECK (outcome IN ('ok', 'denied')),
+    detail         TEXT,
+    ip             TEXT,
+    prev_hash      TEXT NOT NULL,
+    row_hash       TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS audit_log_by_document ON audit_log (document_id);
+
+-- Refuse to change or remove audit rows, even from the application itself.
+CREATE OR REPLACE FUNCTION audit_log_refuse_changes() RETURNS trigger AS $$
+BEGIN
+    RAISE EXCEPTION 'audit_log is append-only';
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS audit_log_no_change ON audit_log;
+CREATE TRIGGER audit_log_no_change
+    BEFORE UPDATE OR DELETE ON audit_log
+    FOR EACH ROW EXECUTE FUNCTION audit_log_refuse_changes();
+
+DROP TRIGGER IF EXISTS audit_log_no_truncate ON audit_log;
+CREATE TRIGGER audit_log_no_truncate
+    BEFORE TRUNCATE ON audit_log
+    FOR EACH STATEMENT EXECUTE FUNCTION audit_log_refuse_changes();
