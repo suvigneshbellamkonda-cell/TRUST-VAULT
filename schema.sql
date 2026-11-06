@@ -1,13 +1,14 @@
 -- TrustVault database schema.
 -- Safe to run more than once: every statement uses IF NOT EXISTS.
 
--- People who can log in. There is no public sign-up: the admin creates users.
+-- People who can log in. Accounts are made by an admin, or by the admin
+-- registration page (which needs a secret setup code).
 CREATE TABLE IF NOT EXISTS users (
     id            SERIAL PRIMARY KEY,
     username      TEXT NOT NULL UNIQUE,
     full_name     TEXT NOT NULL,
     password_hash TEXT NOT NULL,          -- never the real password
-    role          TEXT NOT NULL CHECK (role IN ('admin', 'owner', 'viewer')),
+    role          TEXT NOT NULL CHECK (role IN ('admin', 'user')),
     is_active     BOOLEAN NOT NULL DEFAULT TRUE,   -- FALSE = disabled, cannot log in
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -63,7 +64,7 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 );
 
 CREATE INDEX IF NOT EXISTS login_attempts_by_user ON login_attempts (username, attempted_at);
-CREATE INDEX IF NOT EXISTS login_attempts_by_ip ON login_attempts (ip, attempted_at); 
+CREATE INDEX IF NOT EXISTS login_attempts_by_ip ON login_attempts (ip, attempted_at);
 
 -- ---- Added on Day 3 (documents and audit log) ----
 
@@ -107,3 +108,22 @@ DROP TRIGGER IF EXISTS audit_log_no_truncate ON audit_log;
 CREATE TRIGGER audit_log_no_truncate
     BEFORE TRUNCATE ON audit_log
     FOR EACH STATEMENT EXECUTE FUNCTION audit_log_refuse_changes();
+
+-- ---- Added on Day 5 (two roles, e-mail and organisation) ----
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS organisation TEXT;
+
+-- One e-mail address belongs to one account (upper or lower case is the same).
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique
+    ON users (lower(email)) WHERE email IS NOT NULL;
+
+-- Older databases had three roles (admin, owner, viewer). Now there are two:
+-- admin and user. Every former owner or viewer becomes a user.
+DO $$
+BEGIN
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    UPDATE users SET role = 'user' WHERE role IN ('owner', 'viewer');
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'user'));
+END
+$$;

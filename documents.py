@@ -60,14 +60,14 @@ def list_documents():
 
 @bp.route("/documents/upload")
 @login_required
-@role_required("owner")
+@role_required("user")
 def upload_form():
     return render_template("upload.html", categories=CATEGORIES)
 
 
 @bp.route("/documents/upload", methods=["POST"])
 @login_required
-@role_required("owner")
+@role_required("user")
 def upload():
     # The owner is always the logged-in user. No owner field is read from the form.
     category = request.form.get("category", "")

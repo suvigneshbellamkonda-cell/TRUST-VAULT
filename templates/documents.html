@@ -6,7 +6,7 @@
     <h1>Documents</h1>
     <p>Only documents you own or that were shared with you appear here.</p>
   </div>
-  {% if g.user.role == 'owner' %}
+  {% if g.user.role == 'user' %}
     <a class="button" href="{{ url_for('documents.upload_form') }}">Upload a document</a>
   {% endif %}
 </div>
@@ -55,6 +55,6 @@
 {% elif searching %}
   <div class="empty">No documents you can open match that search. Try fewer words or clear the search.</div>
 {% else %}
-  <div class="empty">You have no documents yet. Documents appear here when you upload them or when an owner shares one with you.</div>
+  <div class="empty">You have no documents yet. Documents appear here when you upload them or when someone shares one with you.</div>
 {% endif %}
 {% endblock %}

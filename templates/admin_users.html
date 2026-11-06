@@ -5,17 +5,18 @@
 <div class="page-head">
   <div>
     <h1>Users</h1>
-    <p>Only an administrator can create accounts. Switching an account off ends its sessions at once.</p>
+    <p>Only an administrator can create accounts, including other administrators. Switching an account off ends its sessions at once.</p>
   </div>
 </div>
 
 <div class="table-wrap">
 <table>
-  <tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th></th></tr>
+  <tr><th>Username</th><th>Name</th><th>E-mail</th><th>Role</th><th>Status</th><th></th></tr>
   {% for u in users %}
   <tr>
     <td>{{ person(u.username, True) }}</td>
     <td>{{ u.full_name }}</td>
+    <td>{{ u.email or '' }}</td>
     <td>{{ u.role }}</td>
     <td><span class="badge badge-{{ 'active' if u.is_active else 'disabled' }}">{{ 'active' if u.is_active else 'disabled' }}</span></td>
     <td>
@@ -43,6 +44,9 @@
       </label>
       <label>Full name
         <input type="text" name="full_name" required maxlength="80">
+      </label>
+      <label>E-mail
+        <input type="email" name="email" required maxlength="120">
       </label>
       <label>Role
         <select name="role" required>

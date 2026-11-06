@@ -26,7 +26,7 @@ def query(sql, *args):
         return conn.execute(sql, args).fetchall()
 
 
-def make_user(role="viewer", password="Temp-pass-12345", active=True):
+def make_user(role="user", password="Temp-pass-12345", active=True):
     """Insert a throwaway user straight into the test database."""
     username = "t_" + uuid.uuid4().hex[:8]
     with get_conn() as conn:

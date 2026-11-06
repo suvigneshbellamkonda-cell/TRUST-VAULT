@@ -12,13 +12,14 @@ from db import get_conn
 # Demo accounts. These passwords are published in the README so the
 # evaluators can log in. That is an accepted risk (see THREATS.md).
 DEMO_USERS = [
-    # username,  full name,       role,     password
-    ("admin",    "Asha Admin",    "admin",  "Admin@TV2026"),
-    ("alice",    "Alice Owner",   "owner",  "Alice@TV2026"),
-    ("bob",      "Bob Owner",     "owner",  "Bob@TV2026"),
-    ("carol",    "Carol Viewer",  "viewer", "Carol@TV2026"),
-    ("dave",     "Dave Viewer",   "viewer", "Dave@TV2026"),
+    # username,  full name,       role,    password
+    ("admin",    "Asha Admin",    "admin", "Admin@TV2026"),
+    ("alice",    "Alice Rao",     "user",  "Alice@TV2026"),
+    ("bob",      "Bob Nair",      "user",  "Bob@TV2026"),
+    ("carol",    "Carol Das",     "user",  "Carol@TV2026"),
+    ("dave",     "Dave Iyer",     "user",  "Dave@TV2026"),
 ]
+DEMO_ORGANISATION = "TrustVault Demo"
 
 
 def main():
@@ -30,13 +31,19 @@ def main():
 
         for username, full_name, role, password in DEMO_USERS:
             # %s placeholders: psycopg fills them in safely (no SQL injection).
+            # Running this again only refreshes the name, e-mail and organisation
+            # (and never the password), so the demo accounts stay tidy.
             conn.execute(
                 """
-                INSERT INTO users (username, full_name, password_hash, role)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (username) DO NOTHING
+                INSERT INTO users (username, full_name, password_hash, role, email, organisation)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (username) DO UPDATE
+                SET full_name = EXCLUDED.full_name,
+                    email = COALESCE(users.email, EXCLUDED.email),
+                    organisation = COALESCE(users.organisation, EXCLUDED.organisation)
                 """,
-                (username, full_name, generate_password_hash(password), role),
+                (username, full_name, generate_password_hash(password), role,
+                 f"{username}@trustvault.example", DEMO_ORGANISATION),
             )
 
         users = conn.execute(

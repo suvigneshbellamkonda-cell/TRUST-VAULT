@@ -12,4 +12,7 @@
   </label>
   <button type="submit">Sign in</button>
 </form>
+{% if registration_open() %}
+<p class="login-alt">Setting up TrustVault for your organisation? <a href="{{ url_for('register') }}">Register as administrator</a></p>
+{% endif %}
 {% endblock %}

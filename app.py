@@ -1,5 +1,6 @@
 import os
 import re
+import secrets
 from datetime import timedelta
 
 import psycopg
@@ -32,11 +33,23 @@ app.config.update(
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
 app.jinja_env.globals["csrf_token"] = csrf_token
+
+
+def setup_code():
+    """The secret that allows admin registration. Kept in the server settings,
+    never in the code. Empty (or too short) means registration is switched off."""
+    code = os.environ.get("SETUP_CODE", "")
+    return code if len(code) >= MIN_SETUP_CODE else ""
+
+
+app.jinja_env.globals["registration_open"] = lambda: bool(setup_code())
 app.register_blueprint(documents_bp)
 app.register_blueprint(admin_audit_bp)
 
-ROLES = ("admin", "owner", "viewer")
+ROLES = ("admin", "user")
 USERNAME_RE = re.compile(r"^[a-z0-9_]{3,30}$")
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+MIN_SETUP_CODE = 12      # a shorter setup code is treated as "registration off"
 
 MAX_FAILS_PER_USERNAME = 5
 MAX_FAILS_PER_IP = 20
@@ -61,8 +74,8 @@ def load_user():
     if user_id is not None:
         with get_conn() as conn:
             user = conn.execute(
-                "SELECT id, username, full_name, role, is_active, session_version "
-                "FROM users WHERE id = %s",
+                "SELECT id, username, full_name, role, organisation, is_active, "
+                "session_version FROM users WHERE id = %s",
                 (user_id,),
             ).fetchone()
         if (
@@ -167,6 +180,102 @@ def logout():
     return redirect(url_for("login"))
 
 
+# ---------------------------------------------- admin registration
+
+def check_new_account(form, need_password=True):
+    """Validate the fields shared by admin registration and 'Create a user'.
+    Returns (clean_values, problem). problem is None when everything is fine."""
+    username = form.get("username", "").strip().lower()
+    full_name = form.get("full_name", "").strip()
+    email = form.get("email", "").strip().lower()
+    password = form.get("password", "")
+    values = {"username": username, "full_name": full_name, "email": email,
+              "password": password}
+
+    problem = None
+    if not 1 <= len(full_name) <= 80:
+        problem = "Full name must be 1-80 characters."
+    elif len(email) > 120 or not EMAIL_RE.match(email):
+        problem = "Enter a valid e-mail address."
+    elif not USERNAME_RE.match(username):
+        problem = "Username must be 3-30 characters: a-z, 0-9 and underscore."
+    elif not 10 <= len(password) <= 200:
+        problem = "Password must be at least 10 characters."
+    return values, problem
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """Create an administrator. Needs the secret setup code, so a stranger cannot
+    make themselves an admin. Further admins are added by an existing admin
+    on the Users page."""
+    code = setup_code()
+    if not code:
+        abort(404)                      # switched off: the page does not exist
+    if g.user is not None:
+        return redirect(url_for("home"))
+    if request.method == "GET":
+        return render_template("register.html", form={})
+
+    ip = request.remote_addr or "unknown"
+    guess_key = f"register:{ip}"        # failed guesses are counted per address
+    sent = request.form.get("setup_code", "")[:200]
+    organisation = request.form.get("organisation", "").strip()
+    confirm = request.form.get("confirm_password", "")
+    form = {k: request.form.get(k, "")[:200] for k in
+            ("full_name", "email", "username", "organisation")}
+
+    with get_conn() as conn:
+        if too_many_failures(conn, guess_key, ip):
+            audit.record(conn, "register.locked", outcome="denied",
+                         actor_username=guess_key, detail="too many failures")
+            flash("Too many failed attempts. Try again in 15 minutes.", "error")
+            return render_template("register.html", form=form), 429
+
+        # The code is checked FIRST, before anything else is looked at.
+        if not secrets.compare_digest(sent.encode(), code.encode()):
+            conn.execute("INSERT INTO login_attempts (username, ip, success) "
+                         "VALUES (%s, %s, FALSE)", (guess_key, ip))
+            audit.record(conn, "register.fail", outcome="denied",
+                         actor_username=guess_key, detail="wrong setup code")
+            flash("The setup code is not correct.", "error")
+            return render_template("register.html", form=form), 403
+
+        values, problem = check_new_account(request.form)
+        if problem is None and not 1 <= len(organisation) <= 100:
+            problem = "Organisation name must be 1-100 characters."
+        if problem is None and values["password"] != confirm:
+            problem = "The two passwords are not the same."
+        if problem is None:
+            taken = conn.execute(
+                "SELECT 1 FROM users WHERE username = %s OR lower(email) = %s",
+                (values["username"], values["email"])).fetchone()
+            if taken:
+                problem = "That username or e-mail is already used."
+
+        if problem is None:
+            try:
+                new_user = conn.execute(
+                    "INSERT INTO users (username, full_name, password_hash, role, "
+                    "email, organisation) VALUES (%s, %s, %s, 'admin', %s, %s) "
+                    "RETURNING id",
+                    (values["username"], values["full_name"],
+                     generate_password_hash(values["password"]), values["email"],
+                     organisation)).fetchone()
+                audit.record(conn, "admin.register", actor_id=new_user["id"],
+                             actor_username=values["username"],
+                             target_user_id=new_user["id"],
+                             detail=f"organisation={organisation}"[:200])
+            except psycopg.errors.UniqueViolation:
+                problem = "That username or e-mail is already used."
+
+    if problem:
+        flash(problem, "error")
+        return render_template("register.html", form=form), 400
+    flash("Administrator account created. You can sign in now.", "ok")
+    return redirect(url_for("login"))
+
+
 # ------------------------------------------------------------- pages
 
 @app.route("/")
@@ -195,7 +304,7 @@ def health():
 def admin_users():
     with get_conn() as conn:
         users = conn.execute(
-            "SELECT id, username, full_name, role, is_active, created_at "
+            "SELECT id, username, full_name, email, role, is_active, created_at "
             "FROM users ORDER BY id"
         ).fetchall()
     return render_template("admin_users.html", users=users, roles=ROLES)
@@ -205,36 +314,28 @@ def admin_users():
 @login_required
 @role_required("admin")
 def create_user():
-    # Only these four fields are read from the form. Anything else the
-    # browser sends is ignored.
-    username = request.form.get("username", "").strip().lower()
-    full_name = request.form.get("full_name", "").strip()
+    # Only these five fields are read from the form. Anything else the
+    # browser sends is ignored. The new account joins the creator's organisation.
+    values, problem = check_new_account(request.form)
     role = request.form.get("role", "")
-    password = request.form.get("password", "")
-
-    problem = None
-    if not USERNAME_RE.match(username):
-        problem = "Username must be 3-30 characters: a-z, 0-9 and underscore."
-    elif not 1 <= len(full_name) <= 80:
-        problem = "Full name must be 1-80 characters."
-    elif role not in ROLES:
+    if problem is None and role not in ROLES:
         problem = "Choose a valid role."
-    elif not 10 <= len(password) <= 200:
-        problem = "Password must be at least 10 characters."
 
     if problem is None:
         try:
             with get_conn() as conn:
                 new_user = conn.execute(
-                    "INSERT INTO users (username, full_name, password_hash, role) "
-                    "VALUES (%s, %s, %s, %s) RETURNING id",
-                    (username, full_name, generate_password_hash(password), role),
+                    "INSERT INTO users (username, full_name, password_hash, role, "
+                    "email, organisation) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                    (values["username"], values["full_name"],
+                     generate_password_hash(values["password"]), role,
+                     values["email"], g.user["organisation"]),
                 ).fetchone()
                 audit.record(conn, "user.create", target_user_id=new_user["id"],
-                             detail=f"username={username} role={role}")
-            flash(f"User {username} created.", "ok")
+                             detail=f"username={values['username']} role={role}")
+            flash(f"User {values['username']} created.", "ok")
         except psycopg.errors.UniqueViolation:
-            problem = "That username is already taken."
+            problem = "That username or e-mail is already taken."
 
     if problem:
         flash(problem, "error")

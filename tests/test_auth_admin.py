@@ -128,7 +128,8 @@ def test_only_admin_can_manage_users(alice, bob, carol, dave):
     for client in (alice, bob, carol, dave):
         assert client.get("/admin/users").status_code == 404
         assert post(client, "/admin/users", username="evil", full_name="Evil",
-                    role="admin", password="long-enough-pass").status_code == 404
+                    email="evil@example.com", role="admin",
+                    password="long-enough-pass").status_code == 404
         assert post(client, "/admin/users/1/toggle").status_code == 404
     assert query("SELECT count(*) n FROM users WHERE username = 'evil'")[0]["n"] == 0
 
@@ -136,18 +137,20 @@ def test_only_admin_can_manage_users(alice, bob, carol, dave):
 def test_admin_creates_a_user_who_can_log_in(app, admin):
     username = "t_" + unique("n")[-8:].replace("-", "")
     response = post(admin, "/admin/users", username=username, full_name="New Person",
-                    role="viewer", password="a-long-password-1",
+                    email=f"{username}@example.com", role="user", password="a-long-password-1",
                     is_active="false", session_version="99")        # forged extras
     assert response.status_code == 302
-    row = query("SELECT role, is_active, session_version FROM users WHERE username = %s", username)[0]
-    assert row["role"] == "viewer" and row["is_active"] is True and row["session_version"] != 99
+    row = query("SELECT role, is_active, session_version, email FROM users WHERE username = %s", username)[0]
+    assert row["role"] == "user" and row["is_active"] is True and row["session_version"] != 99
+    assert row["email"] == f"{username}@example.com"
     assert try_login(app, username, "a-long-password-1")[1].status_code == 302
     assert query("SELECT count(*) n FROM audit_log WHERE action = 'user.create' "
                  "AND detail LIKE %s", f"%{username}%")[0]["n"] == 1
 
 
 def test_bad_new_user_input_is_refused_with_a_message(admin):
-    good = {"username": "t_okname1", "full_name": "Ok", "role": "viewer", "password": "long-enough-pass"}
+    good = {"username": "t_okname1", "full_name": "Ok", "email": "ok@example.com",
+            "role": "user", "password": "long-enough-pass"}
     bad_cases = [
         ({"username": "AB"}, "Username must be"),                      # too short
         ({"username": "has space"}, "Username must be"),
@@ -155,6 +158,8 @@ def test_bad_new_user_input_is_refused_with_a_message(admin):
         ({"role": "superadmin"}, "valid role"),                        # not a real role
         ({"password": "short"}, "at least 10"),
         ({"full_name": ""}, "Full name"),
+        ({"email": "not-an-email"}, "valid e-mail"),
+        ({"email": ""}, "valid e-mail"),
     ]
     for change, message in bad_cases:
         response = admin.post("/admin/users", follow_redirects=True,
@@ -167,7 +172,7 @@ def test_bad_new_user_input_is_refused_with_a_message(admin):
 def test_duplicate_username_is_refused(admin):
     response = admin.post("/admin/users", follow_redirects=True, data={
         "csrf_token": csrf(admin), "username": "alice", "full_name": "Another Alice",
-        "role": "viewer", "password": "long-enough-pass"})
+        "email": "another@example.com", "role": "user", "password": "long-enough-pass"})
     assert "already taken" in text(response)
     assert query("SELECT count(*) n FROM users WHERE username = 'alice'")[0]["n"] == 1
 

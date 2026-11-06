@@ -71,8 +71,7 @@ def test_forbidden_and_nonexistent_look_identical(bob, secret):
 
 def test_anonymous_visitors_are_sent_to_login(anon, secret):
     for url in (f"/documents/{secret['doc']}", f"/documents/{secret['doc']}/download",
-                f"/documents/{secret['doc']}/open", "/documents", "/documents/upload",
-                "/", "/admin/users", "/admin/audit"):
+                f"/documents/{secret['doc']}/open", "/documents", "/documents/upload", "/", "/admin/users", "/admin/audit"):
         response = anon.get(url)
         assert response.status_code == 302 and "/login" in response.location, url
 
@@ -96,12 +95,23 @@ def test_refused_attempt_is_written_to_the_audit_log(app, secret):
 
 # ------------------------------------------------------------------ who can upload
 
-def test_only_owners_can_upload(alice, bob, carol, dave, admin):
-    for viewer in (carol, dave, admin):
-        assert viewer.get("/documents/upload").status_code == 404
-        assert upload(viewer).status_code == 404
-    for owner in (alice, bob):
-        assert owner.get("/documents/upload").status_code == 200
+def test_every_user_can_upload_but_admin_cannot(alice, bob, carol, dave, admin):
+    assert admin.get("/documents/upload").status_code == 404
+    assert upload(admin).status_code == 404
+    for person in (alice, bob, carol, dave):          # every ordinary user
+        assert person.get("/documents/upload").status_code == 200
+
+
+def test_whoever_uploads_owns_the_file_and_can_share_it(carol, dave, bob):
+    title = unique("viewerdoc")
+    doc = make_doc(carol, title=title, data=b"CAROLS FILE")
+    assert query("SELECT u.username FROM documents d JOIN users u ON u.id = d.owner_id "
+                 "WHERE d.id = %s", doc)[0]["username"] == "carol"
+    assert dave.get(f"/documents/{doc}").status_code == 404           # nobody else sees it
+    assert give(carol, doc, "dave", "read").status_code == 302         # she can share it
+    assert dave.get(f"/documents/{doc}/download").data == b"CAROLS FILE"
+    assert post(dave, f"/documents/{doc}/delete").status_code == 404   # dave still cannot delete
+    assert post(carol, f"/documents/{doc}/delete").status_code == 302  # she can
 
 
 def test_owner_is_always_the_logged_in_user(alice):
@@ -231,7 +241,7 @@ def test_changing_a_grant_updates_it_instead_of_adding_another(alice):
 
 
 def test_grant_for_a_user_who_is_later_disabled_stops_working(app, alice, admin):
-    username, password = make_user(role="viewer")
+    username, password = make_user(role="user")
     doc = make_doc(alice, title=unique("disable"))
     give(alice, doc, username, "read")
     from helpers import try_login
@@ -450,9 +460,11 @@ def test_files_over_30_mb_together_are_refused(alice):
     assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", stem + "%")[0]["n"] == 0
 
 
-def test_viewers_and_admin_cannot_upload_several_files(carol, admin):
-    for client in (carol, admin):
-        assert upload_many(client, [("a.txt", b"x"), ("b.txt", b"y")]).status_code == 404
+def test_admin_cannot_upload_several_files_but_a_user_can(carol, admin):
+    assert upload_many(admin, [("a.txt", b"x"), ("b.txt", b"y")]).status_code == 404
+    stem = unique("viewerbatch")
+    assert upload_many(carol, [(f"{stem}-a.txt", b"x"), (f"{stem}-b.txt", b"y")]).status_code == 302
+    assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", stem + "%")[0]["n"] == 2
 
 
 def test_several_files_need_a_valid_category(alice):
