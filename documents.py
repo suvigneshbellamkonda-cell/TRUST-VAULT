@@ -70,37 +70,72 @@ def upload_form():
 @role_required("owner")
 def upload():
     # The owner is always the logged-in user. No owner field is read from the form.
-    title = clean_title(request.form.get("title", ""))
     category = request.form.get("category", "")
+    files = [f for f in request.files.getlist("file") if f and f.filename]
 
     problem = None
-    if title is None:
-        problem = "Title must be 1-120 characters."
-    elif category not in CATEGORIES:
+    checked = []          # (title, filename, mime_type, data) for every file
+    if category not in CATEGORIES:
         problem = "Choose a category from the list."
+    elif not files:
+        problem = "Choose a file to upload."
+    elif len(files) > uploads.MAX_FILES:
+        problem = f"You can upload at most {uploads.MAX_FILES} files at a time."
     else:
-        try:
-            filename, mime_type, data = uploads.check_upload(request.files.get("file"))
-        except uploads.UploadError as error:
-            problem = str(error)
+        typed = request.form.get("title", "").strip()
+        single_title = clean_title(typed)
+        if (len(files) == 1 or typed) and single_title is None:
+            problem = "Title must be 1-120 characters."
+        total = 0
+        for f in files:
+            if problem:
+                break
+            try:
+                filename, mime_type, data = uploads.check_upload(f)
+            except uploads.UploadError as error:
+                problem = f"{f.filename[:60]}: {error}"
+                break
+            total += len(data)
+            if total > uploads.MAX_BATCH_BYTES:
+                problem = "These files are more than 30 MB together. Upload fewer files at a time."
+                break
+            # One file uses the title typed in the form. With several files, the typed
+            # title goes in front of each file's name ("test1 - report"); with no typed
+            # title, each file's name is the title.
+            stem = filename.rsplit(".", 1)[0]
+            if len(files) == 1:
+                title = single_title
+            elif single_title:
+                title = f"{single_title} - {stem}"[:120].strip()
+            else:
+                title = clean_title(stem) or "Untitled"
+            checked.append((title, filename, mime_type, data))
 
     if problem:
+        # All or nothing: if one file is refused, none of them is stored.
         flash(problem, "error")
         return render_template("upload.html", categories=CATEGORIES), 400
 
-    sha256 = hashlib.sha256(data).hexdigest()
-    with get_conn() as conn:
-        row = conn.execute(
-            "INSERT INTO documents (owner_id, title, category, filename, mime_type, "
-            "size_bytes, sha256, content) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
-            "RETURNING id",
-            (g.user["id"], title, category, filename, mime_type, len(data), sha256, data),
-        ).fetchone()
-        audit.record(conn, "doc.upload", document_id=row["id"],
-                     detail=json.dumps({"filename": filename, "size": len(data),
-                                        "sha256": sha256}))
-    flash("Document uploaded.", "ok")
-    return redirect(url_for("documents.view_document", doc_id=row["id"]))
+    saved_ids = []
+    with get_conn() as conn:   # one transaction: every document and its audit entry, or none
+        for title, filename, mime_type, data in checked:
+            sha256 = hashlib.sha256(data).hexdigest()
+            row = conn.execute(
+                "INSERT INTO documents (owner_id, title, category, filename, mime_type, "
+                "size_bytes, sha256, content) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                "RETURNING id",
+                (g.user["id"], title, category, filename, mime_type, len(data), sha256, data),
+            ).fetchone()
+            audit.record(conn, "doc.upload", document_id=row["id"],
+                         detail=json.dumps({"filename": filename, "size": len(data),
+                                            "sha256": sha256}))
+            saved_ids.append(row["id"])
+
+    if len(saved_ids) == 1:
+        flash("Document uploaded.", "ok")
+        return redirect(url_for("documents.view_document", doc_id=saved_ids[0]))
+    flash(f"{len(saved_ids)} documents uploaded.", "ok")
+    return redirect(url_for("documents.list_documents"))
 
 
 @bp.route("/documents/<int:doc_id>")
@@ -123,6 +158,7 @@ def view_document(doc_id):
         "document.html", doc=doc, grants=grants, categories=CATEGORIES,
         can_edit=can(doc, "edit"), can_share=can(doc, "share"),
         can_delete=can(doc, "delete"),
+        can_open=doc["mime_type"] in PREVIEW_TYPES,
     )
 
 
@@ -149,6 +185,42 @@ def download(doc_id):
     response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
     return response
 
+
+# Types a browser can show safely. Word and Excel files can only be downloaded.
+PREVIEW_TYPES = ("application/pdf", "image/png", "image/jpeg", "text/plain; charset=utf-8")
+
+
+@bp.route("/documents/<int:doc_id>/open")
+@login_required
+def open_document(doc_id):
+    """Show the file in the browser. The same read rule as download applies."""
+    with get_conn() as conn:
+        doc = authorize(conn, g.user, doc_id, "read")
+        if doc is not None and doc["mime_type"] in PREVIEW_TYPES:
+            content = conn.execute(
+                "SELECT content FROM documents WHERE id = %s", (doc_id,)
+            ).fetchone()["content"]
+            audit.record(conn, "doc.open", document_id=doc_id,
+                         detail=json.dumps({"filename": doc["filename"],
+                                            "sha256": doc["sha256"]}))
+    if doc is None:
+        abort(404)
+    if doc["mime_type"] not in PREVIEW_TYPES:
+        return redirect(url_for("documents.download", doc_id=doc_id))
+
+    response = Response(bytes(content), mimetype=doc["mime_type"])
+    response.headers["Content-Disposition"] = f'inline; filename="{doc["filename"]}"'
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Cache-Control"] = "no-store"
+    # The file can never run scripts or load anything. (A PDF is shown by the browser's
+    # own viewer, which does not work inside a sandboxed page, so it gets no "sandbox".)
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'none'" if doc["mime_type"] == "application/pdf"
+        else "default-src 'none'; sandbox")
+    return response
+
+
+# ---- Stage 3 routes are added below this line ----
 
 # ------------------------------------------------ edit, delete, sharing
 

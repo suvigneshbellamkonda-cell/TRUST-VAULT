@@ -9,7 +9,8 @@
     <p>{{ doc.category }} · <span class="badge badge-{{ doc.access }}">{{ doc.access }}</span></p>
   </div>
   <div>
-    <a class="button" href="{{ url_for('documents.download', doc_id=doc.id) }}">Download</a>
+    {% if can_open %}<a class="button" href="{{ url_for('documents.open_document', doc_id=doc.id) }}" target="_blank" rel="noopener">Open</a>{% endif %}
+    <a class="button{{ ' secondary' if can_open }}" href="{{ url_for('documents.download', doc_id=doc.id) }}">Download</a>
     <a class="button secondary" href="{{ url_for('documents.list_documents') }}">Back to documents</a>
   </div>
 </div>

@@ -4,7 +4,9 @@ import os
 import re
 import zipfile
 
-MAX_BYTES = 10 * 1024 * 1024   # 10 MB
+MAX_BYTES = 10 * 1024 * 1024   # 10 MB per file
+MAX_FILES = 10                 # files in one upload
+MAX_BATCH_BYTES = 30 * 1024 * 1024   # all files in one upload together
 
 # extension -> type we will serve it as. We never trust the type the
 # browser claims.

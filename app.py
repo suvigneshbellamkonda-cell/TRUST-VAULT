@@ -24,7 +24,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",   # browser does not send it on cross-site POSTs
     SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),  # https only on Render
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
-    MAX_CONTENT_LENGTH=11 * 1024 * 1024,  # refuse any request over 11 MB
+    MAX_CONTENT_LENGTH=32 * 1024 * 1024,  # refuse any request over 32 MB (10 files, 30 MB in total, plus form data)
 )
 
 # Render puts a proxy in front of the app. This makes request.remote_addr the
@@ -306,7 +306,7 @@ def error_page(error):
     messages = {
         400: "Bad request.",
         404: "Page not found.",
-        413: "That upload is too large (the limit is 10 MB).",
+        413: "That upload is too large (up to 10 MB per file and 30 MB in total).",
         500: "Something went wrong.",
     }
     # Never show the real error text or a stack trace to visitors.

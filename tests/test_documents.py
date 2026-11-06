@@ -27,6 +27,7 @@ def secret(app):
 ROUTES = {
     "view":     ("get",  "/documents/{doc}", {}),
     "download": ("get",  "/documents/{doc}/download", {}),
+    "open":     ("get",  "/documents/{doc}/open", {}),
     "edit":     ("post", "/documents/{doc}/edit", {"title": "hacked", "category": "Other"}),
     "delete":   ("post", "/documents/{doc}/delete", {}),
     "grant":    ("post", "/documents/{doc}/grants", {"username": "{who}", "permission": "edit"}),
@@ -70,7 +71,8 @@ def test_forbidden_and_nonexistent_look_identical(bob, secret):
 
 def test_anonymous_visitors_are_sent_to_login(anon, secret):
     for url in (f"/documents/{secret['doc']}", f"/documents/{secret['doc']}/download",
-                "/documents", "/documents/upload", "/", "/admin/users", "/admin/audit"):
+                f"/documents/{secret['doc']}/open", "/documents", "/documents/upload",
+                "/", "/admin/users", "/admin/audit"):
         response = anon.get(url)
         assert response.status_code == 302 and "/login" in response.location, url
 
@@ -355,10 +357,109 @@ def test_file_over_10_mb_is_refused(alice):
     assert query("SELECT count(*) n FROM documents WHERE title = %s", title)[0]["n"] == 0
 
 
-def test_request_over_11_mb_gets_the_413_page(alice):
+def test_single_file_over_10_mb_is_refused_with_a_clear_message(alice):
     response = upload(alice, data=b"a" * (12 * 1024 * 1024))
+    assert response.status_code == 400
+    assert "larger than 10 MB" in text(response)
+
+
+def test_request_over_32_mb_gets_the_413_page(alice):
+    response = upload(alice, data=b"a" * (33 * 1024 * 1024))
     assert response.status_code == 413
     assert "Traceback" not in text(response)
+    assert "30 MB in total" in text(response)
+
+
+# ------------------------------------------------------------------ several files at once
+
+def upload_many(client, files, category="Contract", title=""):
+    """files = [(name, bytes), ...] sent under the same form field, as the browser does."""
+    form = {"csrf_token": csrf(client), "title": title, "category": category,
+            "file": [(io.BytesIO(data), name) for name, data in files]}
+    return client.post("/documents/upload", data=form, content_type="multipart/form-data")
+
+
+def test_several_files_are_all_stored_owned_and_audited(alice):
+    stem = unique("batch")
+    names = [f"{stem}-{n}.txt" for n in "abc"]
+    response = upload_many(alice, [(n, f"text {n}".encode()) for n in names])
+    assert response.status_code == 302 and response.location.endswith("/documents")
+    rows = query("SELECT id, title, filename, owner_id FROM documents WHERE title LIKE %s ORDER BY id",
+                 stem + "%")
+    assert len(rows) == 3
+    assert {r["title"] for r in rows} == {f"{stem}-{n}" for n in "abc"}   # titles come from file names
+    owner = query("SELECT id FROM users WHERE username = 'alice'")[0]["id"]
+    assert all(r["owner_id"] == owner for r in rows)
+    for r in rows:
+        logged = query("SELECT count(*) n FROM audit_log WHERE action = 'doc.upload' "
+                       "AND outcome = 'ok' AND document_id = %s", r["id"])[0]["n"]
+        assert logged == 1
+
+
+def test_typed_title_is_put_in_front_of_every_file_name_and_found_by_search(alice):
+    word = unique("test")
+    stem = unique("report")
+    response = upload_many(alice, [(f"{stem}-{n}.txt", b"x") for n in "ab"], title=word)
+    assert response.status_code == 302
+    rows = query("SELECT title FROM documents WHERE title LIKE %s ORDER BY id", word + "%")
+    assert {r["title"] for r in rows} == {f"{word} - {stem}-{n}" for n in "ab"}
+    page = text(alice.get(f"/documents?title={word}"))
+    assert f"{word} - {stem}-a" in page and f"{word} - {stem}-b" in page
+    assert f"{word} - {stem}-a" in text(alice.get(f"/documents?title={stem}"))   # file name still finds it
+
+
+def test_a_too_long_typed_title_is_refused_for_several_files(alice):
+    stem = unique("longtitle")
+    response = upload_many(alice, [(f"{stem}-{n}.txt", b"x") for n in "ab"], title="x" * 121)
+    assert response.status_code == 400
+    assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", "%" + stem + "%")[0]["n"] == 0
+
+
+def test_eleven_files_are_refused_and_none_are_saved(alice):
+    stem = unique("toomany")
+    response = upload_many(alice, [(f"{stem}-{n}.txt", b"x") for n in range(11)])
+    assert response.status_code == 400
+    assert "at most 10 files" in text(response)
+    assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", stem + "%")[0]["n"] == 0
+
+
+def test_ten_files_are_accepted(alice):
+    stem = unique("ten")
+    response = upload_many(alice, [(f"{stem}-{n}.txt", b"x") for n in range(10)])
+    assert response.status_code == 302
+    assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", stem + "%")[0]["n"] == 10
+
+
+def test_one_bad_file_means_none_are_saved_and_the_bad_one_is_named(alice):
+    stem = unique("mixed")
+    response = upload_many(alice, [(f"{stem}-good.txt", b"fine"),
+                                   (f"{stem}-bad.pdf", b"this is not a pdf"),
+                                   (f"{stem}-also-good.txt", b"fine too")])
+    assert response.status_code == 400
+    assert f"{stem}-bad.pdf" in text(response)
+    assert "do not match" in text(response)
+    assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", stem + "%")[0]["n"] == 0
+
+
+def test_files_over_30_mb_together_are_refused(alice):
+    stem = unique("heavy")
+    chunk = b"a" * int(7.8 * 1024 * 1024)       # four of these are 31.2 MB: under the 32 MB request cap
+    response = upload_many(alice, [(f"{stem}-{n}.txt", chunk) for n in range(4)])
+    assert response.status_code == 400
+    assert "30 MB together" in text(response)
+    assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", stem + "%")[0]["n"] == 0
+
+
+def test_viewers_and_admin_cannot_upload_several_files(carol, admin):
+    for client in (carol, admin):
+        assert upload_many(client, [("a.txt", b"x"), ("b.txt", b"y")]).status_code == 404
+
+
+def test_several_files_need_a_valid_category(alice):
+    stem = unique("cat")
+    response = upload_many(alice, [(f"{stem}-a.txt", b"x"), (f"{stem}-b.txt", b"y")], category="Nonsense")
+    assert response.status_code == 400
+    assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", stem + "%")[0]["n"] == 0
 
 
 def test_stored_file_is_exact_and_fingerprinted(alice):
@@ -394,3 +495,61 @@ def test_download_headers_make_it_a_safe_download(alice):
     assert response.headers["Cache-Control"] == "no-store"
     assert "sandbox" in response.headers["Content-Security-Policy"]
     assert response.mimetype == "text/plain"
+
+
+# ------------------------------------------------------------------ upload page script
+
+def test_upload_page_loads_its_script_and_the_policy_allows_it(alice):
+    page = alice.get("/documents/upload")
+    body = text(page)
+    assert '/static/upload.js' in body
+    assert "<script>" not in body                      # no inline script anywhere
+    policy = page.headers["Content-Security-Policy"]
+    assert "script-src" not in policy and "default-src 'self'" in policy
+    script = alice.get("/static/upload.js")
+    assert script.status_code == 200 and "javascript" in script.headers["Content-Type"]
+    assert "innerHTML" not in text(script)             # file names are shown as text only
+
+
+# ------------------------------------------------------------------ opening a file in the browser
+
+def test_open_shows_the_file_inline_with_safe_headers(alice):
+    doc = make_doc(alice, data=b"HELLO OPEN")
+    response = alice.get(f"/documents/{doc}/open")
+    assert response.status_code == 200 and response.data == b"HELLO OPEN"
+    assert response.headers["Content-Disposition"].startswith("inline")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Cache-Control"] == "no-store"
+    assert "sandbox" in response.headers["Content-Security-Policy"]
+    assert response.mimetype == "text/plain"
+
+
+def test_open_is_audited_and_the_document_page_has_the_button(alice):
+    doc = make_doc(alice)
+    assert alice.get(f"/documents/{doc}/open").status_code == 200
+    n = query("SELECT count(*) n FROM audit_log WHERE action = 'doc.open' AND outcome = 'ok' "
+              "AND document_id = %s", doc)[0]["n"]
+    assert n == 1
+    assert f"/documents/{doc}/open" in text(alice.get(f"/documents/{doc}"))
+
+
+def test_a_person_with_a_read_grant_can_open_but_others_cannot(alice, carol, bob):
+    doc = make_doc(alice, data=b"SHARED TEXT")
+    assert bob.get(f"/documents/{doc}/open").status_code == 404
+    assert give(alice, doc, "carol", "read").status_code == 302
+    assert carol.get(f"/documents/{doc}/open").data == b"SHARED TEXT"
+    assert f"/documents/{doc}/open" in text(carol.get(f"/documents/{doc}"))
+    gid = active_grant_id(doc, "carol")
+    assert post(alice, f"/documents/{doc}/grants/{gid}/revoke").status_code == 302
+    assert carol.get(f"/documents/{doc}/open").status_code == 404
+
+
+def test_word_files_cannot_be_shown_so_open_sends_them_to_download(alice):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("[Content_Types].xml", "<Types/>")
+        z.writestr("word/document.xml", "<w/>")
+    doc = make_doc(alice, name="letter.docx", data=buf.getvalue())
+    response = alice.get(f"/documents/{doc}/open")
+    assert response.status_code == 302 and response.location.endswith(f"/documents/{doc}/download")
+    assert f"/documents/{doc}/open" not in text(alice.get(f"/documents/{doc}"))

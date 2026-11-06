@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Upload - TrustVault{% endblock %}
 {% block content %}
+<a class="backlink" href="{{ url_for('documents.list_documents') }}">&larr; Documents</a>
 <div class="page-head">
   <div>
     <h1>Upload a document</h1>
@@ -8,19 +9,26 @@
   </div>
   <a class="button secondary" href="{{ url_for('documents.list_documents') }}">Back to documents</a>
 </div>
-<form method="post" action="{{ url_for('documents.upload') }}" enctype="multipart/form-data" class="card" style="max-width:640px">
+<form id="upload-form" method="post" action="{{ url_for('documents.upload') }}" enctype="multipart/form-data" class="card" style="max-width:640px">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <label>Title
-    <input type="text" name="title" required maxlength="120">
+  <label>Title (with several files, it is put in front of each file's name)
+    <input type="text" name="title" maxlength="120">
   </label>
   <label>Category
     <select name="category" required>
       {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
     </select>
   </label>
-  <label>File (pdf, png, jpg, txt, csv, docx or xlsx, up to 10 MB)
-    <input type="file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.txt,.csv,.docx,.xlsx">
+  <label>Files (up to 10 at a time; pdf, png, jpg, txt, csv, docx or xlsx; each up to 10 MB)
+    <input type="file" name="file" required multiple accept=".pdf,.png,.jpg,.jpeg,.txt,.csv,.docx,.xlsx">
   </label>
+  <ul id="file-list" class="file-list" hidden></ul>
   <button type="submit">Upload</button>
+  <div id="upload-status" class="upload-status" role="status" hidden>
+    <p id="upload-status-text">Uploading…</p>
+    <div class="upload-bar"><span></span></div>
+  </div>
+  <p class="muted-small" style="margin:12px 0 0">All the files are checked first. If one is refused, none of them are saved.</p>
 </form>
+<script src="{{ url_for('static', filename='upload.js') }}" defer></script>
 {% endblock %}
