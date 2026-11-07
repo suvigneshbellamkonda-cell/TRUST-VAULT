@@ -23,7 +23,6 @@
     <div><dt>Your access</dt><dd>{{ doc.access }}</dd></div>
     <div><dt>Uploaded (UTC)</dt><dd>{{ doc.created_at.strftime('%Y-%m-%d %H:%M') }}</dd></div>
   </dl>
-  <p class="hash">File fingerprint (SHA-256): <span>{{ doc.sha256 }}</span></p>
 </section>
 
 {% if can_edit %}
@@ -41,7 +40,6 @@
     </div>
     <label>Replace the file (optional)<input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.txt,.csv,.docx,.xlsx"></label>
     <button type="submit">Save changes</button>
-    <p class="muted-small">Every change is recorded in the audit record.</p>
   </form>
 </section>
 {% endif %}
@@ -66,7 +64,7 @@
     </tr>
     {% endfor %}
   </table></div>
-  {% else %}<p class="muted">Only you can open this document.</p>{% endif %}
+  {% else %}<p class="muted">No one else has access.</p>{% endif %}
 
   <h2>Share with a viewer</h2>
   <form method="post" action="{{ url_for('documents.add_grant', doc_id=doc.id) }}">
@@ -88,7 +86,7 @@
 {% if can_delete %}
 <section class="panel danger-zone">
   <h2>Delete</h2>
-  <p class="muted">The document disappears for everyone straight away. The administrator keeps it in the bin for 15 days and can restore it. The deletion is recorded in the audit record.</p>
+  <p class="muted">The document is removed for everyone. The administrator keeps it in the bin for 15 days.</p>
   <form method="post" action="{{ url_for('documents.delete', doc_id=doc.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="check"><input type="checkbox" name="confirm" required> <span>I want to delete this document for everyone</span></label>

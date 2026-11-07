@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Security alerts - TrustVault{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Security alerts</h1><p>Unusual events: repeated wrong passwords, deletions, repeated refused access, bulk opening, locked accounts and a failed chain check.</p></div>
+<div class="page-head"><div><h1>Security alerts</h1></div>
   {% if items %}<form method="post" action="{{ url_for('admin_pages.alerts_seen') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Mark all as seen</button></form>{% endif %}</div>
 {% if items %}<div class="list-card">
   {% for i in items %}<a class="notif unread" href="{{ i.link }}"><span class="dot"></span><span class="msg">{{ i.text }}</span><time>{{ i.at.strftime('%Y-%m-%d %H:%M') }} UTC</time></a>{% endfor %}

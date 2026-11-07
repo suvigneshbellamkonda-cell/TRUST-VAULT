@@ -2,14 +2,13 @@
 {% from "_macros.html" import icon %}
 {% block title %}Overview - TrustVault{% endblock %}
 {% block content %}
-<div class="welcome"><h1>Welcome, {{ g.user.full_name }}</h1>
-  <p>{{ {'admin': 'Here is the state of your TrustVault.', 'owner': 'Here is what is happening with your documents.', 'viewer': 'These are the documents owners have shared with you.'}[g.user.role] }}</p></div>
+<div class="welcome"><h1>Welcome, {{ g.user.full_name }}</h1></div>
 
 {% if g.user.role == 'owner' %}
 <div class="big-actions">
-  <section class="big-action"><div class="icon">{{ icon('doc') }}</div><h2>Open my documents</h2><p>Search, open, download and share the documents you own.</p>
+  <section class="big-action"><div class="icon">{{ icon('doc') }}</div><h2>Open my documents</h2>
     <div><a class="button" href="{{ url_for('documents.list_documents') }}">My documents</a></div></section>
-  <section class="big-action"><div class="icon">{{ icon('up') }}</div><h2>Upload a document</h2><p>Add one or more files (up to 100 MB in total). Only you can open them until you share them.</p>
+  <section class="big-action"><div class="icon">{{ icon('up') }}</div><h2>Upload a document</h2>
     <div><a class="button secondary" href="{{ url_for('documents.upload_form') }}">Upload</a></div></section>
 </div>
 <div class="tiles">
@@ -19,9 +18,9 @@
 </div>
 {% elif g.user.role == 'viewer' %}
 <div class="big-actions">
-  <section class="big-action"><div class="icon">{{ icon('share') }}</div><h2>Shared with me</h2><p>Open the documents owners have given you access to.</p>
+  <section class="big-action"><div class="icon">{{ icon('share') }}</div><h2>Shared with me</h2>
     <div><a class="button" href="{{ url_for('documents.list_documents') }}">Shared with me</a></div></section>
-  <section class="big-action"><div class="icon">{{ icon('star') }}</div><h2>Starred documents</h2><p>Your quick-access list.</p>
+  <section class="big-action"><div class="icon">{{ icon('star') }}</div><h2>Starred documents</h2>
     <div><a class="button secondary" href="{{ url_for('documents.starred') }}">Starred</a></div></section>
 </div>
 <div class="tiles">

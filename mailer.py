@@ -6,7 +6,9 @@ settings (BREVO_API_KEY, MAIL_FROM) and are never in the code.
 """
 import json
 import os
+import socket
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 
 def configured():
@@ -33,3 +35,21 @@ def send(to_email, to_name, subject, text):
             return 200 <= response.status < 300
     except Exception:
         return False
+
+
+def domain_exists(email):
+    """False only when the part after @ is certainly not a real domain (it has
+    no address in the DNS). A mailbox cannot be checked before sending: only
+    the receiving mail server knows if it exists. On a slow or unclear answer
+    this returns True so a real person is never blocked."""
+    domain = email.rsplit("@", 1)[-1].strip().lower()
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        pool.submit(socket.getaddrinfo, domain, None).result(timeout=3)
+        return True
+    except socket.gaierror:
+        return False
+    except Exception:
+        return True
+    finally:
+        pool.shutdown(wait=False)

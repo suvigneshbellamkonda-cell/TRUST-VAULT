@@ -13,7 +13,8 @@
 {% from "_macros.html" import icon %}
 {% set seal %}<svg viewBox="0 0 24 24" fill="none" stroke="#7fb0ff" stroke-width="2" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>{% endset %}
 {% set ep = request.endpoint or '' %}
-{% if g.user %}
+{% set shell = g.user and not public_page %}
+{% if shell %}
 <div class="shell">
   <aside class="side">
     <a class="brand" href="{{ url_for('home') }}">{{ seal }}<span>TrustVault</span></a>
@@ -63,6 +64,6 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
-{% if g.user %}</div></div>{% else %}</div>{% endif %}
+{% if shell %}</div></div>{% else %}</div>{% endif %}
 </body>
 </html>

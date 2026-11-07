@@ -2,8 +2,7 @@
 {% from "_macros.html" import person %}
 {% block title %}Users - TrustVault{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Users</h1>
-  <p>Invite document owners, and switch accounts off or on. The administrator cannot reset anyone's password: people reset their own with "Forgot password".</p></div></div>
+<div class="page-head"><div><h1>Users</h1></div></div>
 
 <section class="panel">
   <h2>Invite an owner</h2>
@@ -14,7 +13,6 @@
       <label>E-mail<input type="email" name="email" required maxlength="120"></label>
     </div>
     <button type="submit">Invitation</button>
-    <p class="muted-small">An e-mail from TrustVault is sent with a link that works once and expires in 48 hours.</p>
   </form>
 </section>
 

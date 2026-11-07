@@ -71,3 +71,10 @@ def dave(app):
 @pytest.fixture
 def admin(app):
     return login(app, "admin")
+
+
+@pytest.fixture(autouse=True)
+def domains_exist(monkeypatch):
+    """The tests have no internet, so every e-mail domain counts as real unless a test says otherwise."""
+    import mailer
+    monkeypatch.setattr(mailer, "domain_exists", lambda email: True)

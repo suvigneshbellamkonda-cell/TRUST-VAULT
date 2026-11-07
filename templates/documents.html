@@ -5,7 +5,6 @@
 <div class="page-head">
   <div>
     <h1>{{ heading or ('My documents' if g.user.role == 'owner' else 'Shared with me') }}</h1>
-    <p>{% if heading %}Documents you marked with a star.{% elif g.user.role == 'owner' %}Documents you have uploaded. Share them with viewers whenever you need.{% else %}Only documents an owner has given you access to appear here.{% endif %}</p>
   </div>
   {% if g.user.role == 'owner' %}<a class="button" href="{{ url_for('documents.upload_form') }}">Upload a document</a>{% endif %}
 </div>

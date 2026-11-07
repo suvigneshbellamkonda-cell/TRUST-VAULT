@@ -2,8 +2,7 @@
 {% from "_macros.html" import person %}
 {% block title %}Viewers - TrustVault{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Viewers</h1>
-  <p>Invite the people you want to share documents with. A viewer sees only what you share.</p></div></div>
+<div class="page-head"><div><h1>Viewers</h1></div></div>
 <section class="panel">
   <h2>Invite a viewer</h2>
   <form method="post" action="{{ url_for('accounts.owner_invite') }}">
@@ -13,7 +12,6 @@
       <label>E-mail<input type="email" name="email" required maxlength="120"></label>
     </div>
     <button type="submit">Invitation</button>
-    <p class="muted-small">An e-mail from TrustVault is sent with a link that works once and expires in 48 hours.</p>
   </form>
 </section>
 <section class="panel">

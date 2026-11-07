@@ -1,12 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Profile - TrustVault{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Profile</h1><p>Your account details.</p></div></div>
+<div class="page-head"><div><h1>Profile</h1></div></div>
+<section class="panel narrow">
+  <h2>Edit your details</h2>
+  <form method="post" action="{{ url_for('accounts.profile_edit') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Full name<input type="text" name="full_name" value="{{ me.full_name }}" required maxlength="80"></label>
+    <label>Username<input type="text" name="username" value="{{ me.username }}" required minlength="3" maxlength="30"></label>
+    <label>E-mail<input type="email" name="email" value="{{ me.email or '' }}" required maxlength="120"></label>
+    <label>Current password (to confirm)<input type="password" name="current_password" required maxlength="200" autocomplete="current-password"></label>
+    <button type="submit">Save changes</button>
+  </form>
+</section>
 <section class="panel narrow">
   <dl class="facts">
-    <div><dt>Full name</dt><dd>{{ me.full_name }}</dd></div>
-    <div><dt>Username</dt><dd>{{ me.username }}</dd></div>
-    <div><dt>E-mail</dt><dd>{{ me.email or '-' }}</dd></div>
     <div><dt>Account type</dt><dd>{{ {'admin': 'Administrator', 'owner': 'Document owner', 'viewer': 'Viewer'}[me.role] }}</dd></div>
     <div><dt>Joined (UTC)</dt><dd>{{ me.created_at.strftime('%Y-%m-%d') }}</dd></div>
     <div><dt>Previous sign-in (UTC)</dt><dd>{{ last.at.strftime('%Y-%m-%d %H:%M') if last else 'This is your first sign-in' }}</dd></div>

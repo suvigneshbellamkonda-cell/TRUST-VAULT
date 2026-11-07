@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Bin - TrustVault{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Bin</h1>
-  <p>Deleted documents are kept for {{ days }} days, then removed for good. You see details only, never contents. Press and hold a row to select several.</p></div></div>
+<div class="page-head"><div><h1>Bin</h1><p>Kept {{ days }} days. Press and hold a row to select several.</p></div></div>
 {% if docs %}
 <form id="restore-form" method="post" action="{{ url_for('admin_pages.bin_restore') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

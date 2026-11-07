@@ -1,11 +1,10 @@
-/* Light or dark. Loaded in the page head so there is no flash of the wrong
-   colours. The choice is kept in this browser only. */
+/* Light by default for everyone; dark only if the person chose it. Loaded in
+   the page head so there is no flash of the wrong colours. */
 (function () {
   var root = document.documentElement;
   var stored = null;
   try { stored = localStorage.getItem("tv-theme"); } catch (e) { stored = null; }
-  var dark = stored ? stored === "dark"
-    : window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  var dark = stored === "dark";                // light unless this person chose dark
   root.setAttribute("data-theme", dark ? "dark" : "light");
 
   document.addEventListener("DOMContentLoaded", function () {

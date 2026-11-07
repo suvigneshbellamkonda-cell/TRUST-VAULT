@@ -3,6 +3,7 @@ notifications. Nobody can create an account except through an invitation:
 the administrator invites owners, and owners invite viewers."""
 import hashlib
 import hmac
+import json
 import os
 import re
 import secrets
@@ -50,6 +51,8 @@ def send_invitation(role, form, back_endpoint):
         problem = "Enter the person's full name (up to 80 characters)."
     elif len(email) > 120 or not EMAIL_RE.match(email):
         problem = "Enter a valid e-mail address."
+    elif not mailer.domain_exists(email):
+        problem = f"The e-mail domain \"{email.rsplit('@', 1)[-1]}\" does not exist. Please check the spelling."
     if problem:
         flash(problem, "error")
         return redirect(url_for(back_endpoint))
@@ -79,7 +82,8 @@ def send_invitation(role, form, back_endpoint):
         f"The link can be used once and expires in {INVITE_HOURS} hours. If you were not "
         "expecting this invitation, please ignore this e-mail.\n\nRegards,\nTrustVault")
     if sent:
-        flash(f"Invitation sent to {email}.", "ok")
+        flash(f"The invitation e-mail was handed to the mail service for {email}. "
+              "If that address does not exist it will not arrive, and the invitation stays Pending.", "ok")
     else:
         flash(f"E-mail is not set up on this server, so nothing was sent. "
               f"Give this one-time link to {full_name} yourself: {link}", "error")
@@ -145,8 +149,8 @@ def find_invitation(conn, token):
 
 @bp.route("/join/<token>", methods=["GET", "POST"])
 def join(token):
-    if g.user is not None:
-        return redirect(url_for("home"))
+    # Works even if someone else is signed in on this browser (for example the
+    # inviter opening the link on the same computer): the page is a public page.
     with get_conn() as conn:
         invite = find_invitation(conn, token)
     if invite is None:
@@ -198,6 +202,8 @@ def join(token):
     if problem:
         flash(problem, "error")
         return render_template("join.html", invite=invite, form=form), 400
+    if g.user is not None:
+        session.clear()          # the new person signs in fresh, not as the inviter
     return redirect(url_for("accounts.joined"))
 
 
@@ -365,6 +371,49 @@ def change_password():
     return redirect(url_for("accounts.settings"))
 
 
+@bp.route("/profile/edit", methods=["POST"])
+@login_required
+def profile_edit():
+    full_name = request.form.get("full_name", "").strip()
+    username = request.form.get("username", "").strip().lower()
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("current_password", "")[:200]
+    problem = None
+    if not 1 <= len(full_name) <= 80:
+        problem = "Full name must be 1-80 characters."
+    elif not USERNAME_RE.match(username):
+        problem = "Username must be 3-30 characters: a-z, 0-9 and underscore."
+    elif len(email) > 120 or not EMAIL_RE.match(email):
+        problem = "Enter a valid e-mail address."
+    if problem is None:
+        try:
+            with get_conn() as conn:
+                me = conn.execute("SELECT username, full_name, email, password_hash FROM users "
+                                  "WHERE id = %s", (g.user["id"],)).fetchone()
+                if not check_password_hash(me["password_hash"], password):
+                    audit.record(conn, "profile.edit", outcome="denied", detail="wrong password")
+                    problem = "Your current password is not correct."
+                else:
+                    changed = {k: [old, new] for k, old, new in (
+                        ("full_name", me["full_name"], full_name),
+                        ("username", me["username"], username),
+                        ("email", (me["email"] or "").lower(), email)) if old != new}
+                    if changed:
+                        conn.execute("UPDATE users SET full_name = %s, username = %s, email = %s "
+                                     "WHERE id = %s", (full_name, username, email, g.user["id"]))
+                        if "email" in changed:      # a code sent to the old address stops working
+                            conn.execute("UPDATE password_resets SET used_at = now() "
+                                         "WHERE user_id = %s AND used_at IS NULL", (g.user["id"],))
+                        audit.record(conn, "profile.edit", detail=json.dumps(changed)[:400])
+        except psycopg.errors.UniqueViolation:
+            problem = "That username or e-mail address is already in use."
+    if problem:
+        flash(problem, "error")
+    else:
+        flash("Profile updated.", "ok")
+    return redirect(url_for("accounts.profile"))
+
+
 @bp.route("/profile")
 @login_required
 def profile():
@@ -402,6 +451,19 @@ def notification_go(note_id):
     if not link.startswith("/") or link.startswith("//"):
         abort(404)
     return redirect(link)
+
+
+@bp.route("/notifications/clear", methods=["POST"])
+@login_required
+def notifications_clear():
+    """Delete the person's own notifications: the ones already read, or all."""
+    if request.form.get("which") == "all":
+        sql = "DELETE FROM notifications WHERE user_id = %s"
+    else:
+        sql = "DELETE FROM notifications WHERE user_id = %s AND read_at IS NOT NULL"
+    with get_conn() as conn:
+        conn.execute(sql, (g.user["id"],))
+    return redirect(url_for("accounts.notifications"))
 
 
 @bp.route("/notifications/read-all", methods=["POST"])

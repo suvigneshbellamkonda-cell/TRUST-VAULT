@@ -3,7 +3,7 @@
 {% block title %}Upload - TrustVault{% endblock %}
 {% block content %}
 {{ back(url_for('documents.list_documents')) }}
-<div class="page-head"><div><h1>Upload documents</h1><p>Only you can open them until you give someone access.</p></div></div>
+<div class="page-head"><div><h1>Upload documents</h1></div></div>
 <form id="upload-form" method="post" action="{{ url_for('documents.upload') }}" enctype="multipart/form-data" class="card narrow">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Title (with several files, it is put in front of each file's name)
@@ -22,7 +22,6 @@
     <p id="upload-status-text">Uploading… 0%</p>
     <div class="upload-bar"><span></span></div>
   </div>
-  <p class="muted-small">All the files are checked first. If one is refused, none of them are saved.</p>
 </form>
 <script src="{{ url_for('static', filename='upload.js') }}" defer></script>
 {% endblock %}
