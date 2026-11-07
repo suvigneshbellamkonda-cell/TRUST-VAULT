@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Enter the code - TrustVault{% endblock %}
+{% block content %}
+<h1 class="login-title">Enter the code</h1>
+<p class="muted">Type the 6-digit code we e-mailed you. It expires in 10 minutes and works once. After 5 wrong tries it is blocked.</p>
+<form method="post" action="{{ url_for('accounts.forgot_code') }}" class="login-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>One-time code
+    <input type="text" name="otp" class="otp-input" inputmode="numeric" autocomplete="one-time-code" required maxlength="10" autofocus>
+  </label>
+  <button type="submit">Verify</button>
+</form>
+<p class="login-alt"><a href="{{ url_for('accounts.forgot') }}">Send a new code</a></p>
+{% endblock %}

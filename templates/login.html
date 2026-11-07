@@ -12,7 +12,6 @@
   </label>
   <button type="submit">Sign in</button>
 </form>
-{% if registration_open() %}
-<p class="login-alt">Setting up TrustVault for your organisation? <a href="{{ url_for('register') }}">Register as administrator</a></p>
-{% endif %}
+<p class="login-alt"><a href="{{ url_for('accounts.forgot') }}">Forgot password?</a></p>
+<p class="login-alt">Accounts are created only by invitation. If you were invited, please use the link in your e-mail.</p>
 {% endblock %}

@@ -1,53 +1,68 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}TrustVault{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='back.js') }}" defer></script>
 </head>
 <body>
-{% from "_macros.html" import user_icon %}
+{% from "_macros.html" import icon %}
 {% set seal %}<svg viewBox="0 0 24 24" fill="none" stroke="#7fb0ff" stroke-width="2" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>{% endset %}
-<div class="layout {{ 'layout-shell' if g.user else 'layout-auth' }}">
-  {% if g.user %}
-  <header class="topbar">
+{% set ep = request.endpoint or '' %}
+{% if g.user %}
+<div class="shell">
+  <aside class="side">
     <a class="brand" href="{{ url_for('home') }}">{{ seal }}<span>TrustVault</span></a>
     <nav aria-label="Main">
-      <a href="{{ url_for('home') }}" class="{{ 'active' if request.endpoint == 'home' }}">Overview</a>
-      <a href="{{ url_for('documents.list_documents') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('documents.') }}">Documents</a>
+      <a href="{{ url_for('home') }}" class="{{ 'active' if ep == 'home' }}">{{ icon('home') }}Overview</a>
       {% if g.user.role == 'admin' %}
-      <a href="{{ url_for('admin_users') }}" class="{{ 'active' if request.endpoint in ('admin_users', 'create_user', 'toggle_user') }}">Users</a>
-      <a href="{{ url_for('admin_audit.audit_view') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin_audit.') }}">Audit trail</a>
+        <a href="{{ url_for('admin_users') }}" class="{{ 'active' if ep == 'admin_users' }}">{{ icon('users') }}Users</a>
+        <a href="{{ url_for('admin_audit.audit_view') }}" class="{{ 'active' if ep.startswith('admin_audit.') }}">{{ icon('audit') }}Audit record</a>
+        <a href="{{ url_for('admin_pages.documents_log') }}" class="{{ 'active' if ep == 'admin_pages.documents_log' }}">{{ icon('log') }}Documents log</a>
+        <a href="{{ url_for('admin_pages.bin_view') }}" class="{{ 'active' if ep == 'admin_pages.bin_view' }}">{{ icon('bin') }}Bin</a>
+      {% elif g.user.role == 'owner' %}
+        <a href="{{ url_for('documents.list_documents') }}" class="{{ 'active' if ep in ('documents.list_documents', 'documents.view_document', 'documents.upload_form') }}">{{ icon('doc') }}My documents</a>
+        <a href="{{ url_for('documents.shared_by_me') }}" class="{{ 'active' if ep == 'documents.shared_by_me' }}">{{ icon('share') }}Shared documents</a>
+        <a href="{{ url_for('documents.starred') }}" class="{{ 'active' if ep == 'documents.starred' }}">{{ icon('star') }}Starred documents</a>
+        <a href="{{ url_for('accounts.viewers') }}" class="{{ 'active' if ep == 'accounts.viewers' }}">{{ icon('users') }}Viewers</a>
+      {% else %}
+        <a href="{{ url_for('documents.list_documents') }}" class="{{ 'active' if ep in ('documents.list_documents', 'documents.view_document') }}">{{ icon('share') }}Shared with me</a>
+        <a href="{{ url_for('documents.starred') }}" class="{{ 'active' if ep == 'documents.starred' }}">{{ icon('star') }}Starred documents</a>
       {% endif %}
+      <a href="{{ url_for('accounts.profile') }}" class="{{ 'active' if ep == 'accounts.profile' }}">{{ icon('user') }}Profile</a>
+      <a href="{{ url_for('accounts.settings') }}" class="{{ 'active' if ep == 'accounts.settings' }}">{{ icon('gear') }}Settings</a>
     </nav>
-    <div class="who">
-      <span class="who-name"><span class="avatar">{{ user_icon() }}</span><span class="name-text">{{ g.user.username }}</span></span>
-      <span class="role">{{ g.user.role }}</span>
-      <form method="post" action="{{ url_for('logout') }}" class="inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="logout">Log out</button>
-      </form>
+    <div class="grow"></div>
+    <div class="me"><b>{{ g.user.full_name }}</b>{{ {'admin': 'Administrator', 'owner': 'Document owner', 'viewer': 'Viewer'}[g.user.role] }}</div>
+    <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">Log out</button>
+    </form>
+  </aside>
+  <div class="content">
+    <div class="toprow">
+      {% if g.user.role == 'admin' and alert_count %}
+      <a class="round alert" href="{{ url_for('admin_pages.alerts') }}" aria-label="Security alerts: {{ alert_count }}" title="Security alerts">{{ icon('tri') }}<span class="count">{{ alert_count }}</span></a>
+      {% endif %}
+      <a class="round" href="{{ url_for('accounts.notifications') }}" aria-label="Notifications{{ ': %d unread' % unread if unread }}" title="Notifications">{{ icon('bell') }}{% if unread %}<span class="count">{{ unread }}</span>{% endif %}</a>
     </div>
-  </header>
-  {% else %}
+{% else %}
+<div class="layout layout-auth">
   <section class="auth-brand">
     <svg class="auth-seal" viewBox="0 0 24 24" fill="none" stroke="#7fb0ff" stroke-width="1.6" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
-    <div>
-      <div class="auth-welcome">Welcome to</div>
-      <div class="auth-name">TrustVault</div>
-    </div>
+    <div><div class="auth-welcome">Welcome to</div><div class="auth-name">TrustVault</div></div>
   </section>
-  {% endif %}
-  <main>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for category, message in messages %}
-        <p class="flash {{ category }}">{{ message }}</p>
-      {% endfor %}
-    {% endwith %}
-    {% block content %}{% endblock %}
-  </main>
-</div>
+{% endif %}
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}<p class="flash {{ category }}">{{ message }}</p>{% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+{% if g.user %}</div></div>{% else %}</div>{% endif %}
 </body>
 </html>

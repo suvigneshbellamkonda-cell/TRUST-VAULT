@@ -26,14 +26,15 @@ def query(sql, *args):
         return conn.execute(sql, args).fetchall()
 
 
-def make_user(role="user", password="Temp-pass-12345", active=True):
+def make_user(role="owner", password="Temp-pass-12345", active=True):
     """Insert a throwaway user straight into the test database."""
     username = "t_" + uuid.uuid4().hex[:8]
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO users (username, full_name, password_hash, role, is_active) "
-            "VALUES (%s, %s, %s, %s, %s)",
-            (username, "Temp " + username, generate_password_hash(password), role, active),
+            "INSERT INTO users (username, full_name, password_hash, role, is_active, email) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            (username, "Temp " + username, generate_password_hash(password), role, active,
+             f"{username}@example.com"),
         )
     return username, password
 

@@ -4,9 +4,8 @@ import os
 import re
 import zipfile
 
-MAX_BYTES = 10 * 1024 * 1024   # 10 MB per file
-MAX_FILES = 10                 # files in one upload
-MAX_BATCH_BYTES = 30 * 1024 * 1024   # all files in one upload together
+MAX_FILES = 50                 # files in one upload
+MAX_BATCH_BYTES = 100 * 1024 * 1024  # all files in one upload together (no limit per file)
 
 # extension -> type we will serve it as. We never trust the type the
 # browser claims.
@@ -65,7 +64,7 @@ def clean_filename(name, ext):
     return f"{base}.{ext}"
 
 
-def check_upload(file_storage):
+def check_upload(file_storage, budget=MAX_BATCH_BYTES):
     """Return (clean_filename, mime_type, bytes) or raise UploadError."""
     if file_storage is None or not file_storage.filename:
         raise UploadError("Choose a file to upload.")
@@ -76,9 +75,11 @@ def check_upload(file_storage):
         raise UploadError("That file type is not allowed. Allowed: "
                           + ", ".join(sorted(ALLOWED_TYPES)) + ".")
 
-    data = file_storage.stream.read(MAX_BYTES + 1)
-    if len(data) > MAX_BYTES:
-        raise UploadError("That file is larger than 10 MB.")
+    # Reads at most what is left of the 100 MB for this upload, so an oversized
+    # upload is stopped without holding all of it in memory.
+    data = file_storage.stream.read(budget + 1)
+    if len(data) > budget:
+        raise UploadError("The files are more than 100 MB together. Upload fewer files at a time.")
     if not data:
         raise UploadError("That file is empty.")
     if not _content_matches(ext, data):

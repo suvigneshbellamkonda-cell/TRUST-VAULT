@@ -4,13 +4,14 @@ import hashlib
 import json
 from datetime import datetime
 
-from flask import (Blueprint, Response, abort, flash, g, redirect,
+from flask import (Blueprint, Response, abort, flash, g, jsonify, redirect,
                    render_template, request, url_for)
 
 import audit
 import uploads
 from authz import authorize, can, visible_documents
 from db import get_conn
+import notify
 from security import login_required, role_required
 
 bp = Blueprint("documents", __name__)
@@ -39,6 +40,9 @@ def list_documents():
     title = request.args.get("title", "").strip()[:120]
     category = request.args.get("category", "")
     owner = request.args.get("owner", "").strip()[:80]
+    access = request.args.get("access", "")
+    if access not in ("read", "edit"):
+        access = ""
     date_from_text = request.args.get("date_from", "").strip()
     date_to_text = request.args.get("date_to", "").strip()
     date_from, date_to = parse_date(date_from_text), parse_date(date_to_text)
@@ -48,26 +52,82 @@ def list_documents():
         flash("Dates must look like 2026-11-04. That date filter was ignored.", "error")
 
     with get_conn() as conn:
-        docs = visible_documents(conn, g.user, title=title, category=category,
-                                 owner=owner, date_from=date_from, date_to=date_to)
-    searching = bool(title or category or owner or date_from or date_to)
+        docs = visible_documents(
+            conn, g.user, title=title, category=category, owner=owner, date_from=date_from,
+            date_to=date_to, access=access,
+            scope="mine" if g.user["role"] == "owner" else "shared")
+    searching = bool(title or category or owner or date_from or date_to or access)
     return render_template(
         "documents.html", docs=docs, categories=CATEGORIES, searching=searching,
-        title=title, category=category, owner=owner,
+        title=title, category=category, owner=owner, access=access, heading=None,
         date_from=date_from_text if date_from else "", date_to=date_to_text if date_to else "",
     )
 
 
+@bp.route("/documents/starred")
+@login_required
+def starred():
+    with get_conn() as conn:
+        docs = visible_documents(conn, g.user, starred_only=True)
+    return render_template("documents.html", docs=docs, categories=CATEGORIES, searching=False,
+                           title="", category="", owner="", access="", date_from="", date_to="",
+                           heading="Starred documents", simple=True)
+
+
+@bp.route("/documents/shared")
+@login_required
+@role_required("owner")
+def shared_by_me():
+    """Owner's view: every active share of the owner's documents."""
+    username = request.args.get("viewer", "").strip().lower()[:50]
+    access = request.args.get("access", "")
+    where, params = ["d.owner_id = %(uid)s", "d.deleted_at IS NULL", "g.revoked_at IS NULL"], {"uid": g.user["id"]}
+    if username:
+        where.append("(u.username ILIKE %(v)s OR u.full_name ILIKE %(v)s)")
+        params["v"] = "%" + username.replace("%", "").replace("_", "") + "%"
+    if access in ("read", "edit"):
+        where.append("g.permission = %(access)s")
+        params["access"] = access
+    else:
+        access = ""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT d.id AS doc_id, d.title, u.full_name, u.username, g.permission, g.granted_at, "
+            "g.id AS grant_id FROM grants g JOIN documents d ON d.id = g.document_id "
+            "JOIN users u ON u.id = g.user_id WHERE " + " AND ".join(where) +
+            " ORDER BY g.granted_at DESC", params).fetchall()
+    return render_template("shared_by_me.html", rows=rows, viewer=username, access=access)
+
+
+@bp.route("/documents/<int:doc_id>/star", methods=["POST"])
+@login_required
+def toggle_star(doc_id):
+    with get_conn() as conn:
+        doc = authorize(conn, g.user, doc_id, "read")
+        if doc is not None:
+            gone = conn.execute("DELETE FROM stars WHERE user_id = %s AND document_id = %s RETURNING 1",
+                                (g.user["id"], doc_id)).fetchone()
+            if gone is None:
+                conn.execute("INSERT INTO stars (user_id, document_id) VALUES (%s, %s)",
+                             (g.user["id"], doc_id))
+    if doc is None:
+        abort(404)
+    nxt = request.form.get("next", "")
+    if not nxt.startswith("/") or nxt.startswith("//"):
+        nxt = url_for("documents.view_document", doc_id=doc_id)
+    return redirect(nxt)
+
+
 @bp.route("/documents/upload")
 @login_required
-@role_required("user")
+@role_required("owner")
 def upload_form():
     return render_template("upload.html", categories=CATEGORIES)
 
 
 @bp.route("/documents/upload", methods=["POST"])
 @login_required
-@role_required("user")
+@role_required("owner")
 def upload():
     # The owner is always the logged-in user. No owner field is read from the form.
     category = request.form.get("category", "")
@@ -91,13 +151,13 @@ def upload():
             if problem:
                 break
             try:
-                filename, mime_type, data = uploads.check_upload(f)
+                filename, mime_type, data = uploads.check_upload(f, uploads.MAX_BATCH_BYTES - total)
             except uploads.UploadError as error:
                 problem = f"{f.filename[:60]}: {error}"
                 break
             total += len(data)
             if total > uploads.MAX_BATCH_BYTES:
-                problem = "These files are more than 30 MB together. Upload fewer files at a time."
+                problem = "These files are more than 100 MB together. Upload fewer files at a time."
                 break
             # One file uses the title typed in the form. With several files, the typed
             # title goes in front of each file's name ("test1 - report"); with no typed
@@ -111,8 +171,11 @@ def upload():
                 title = clean_title(stem) or "Untitled"
             checked.append((title, filename, mime_type, data))
 
+    wants_json = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     if problem:
         # All or nothing: if one file is refused, none of them is stored.
+        if wants_json:
+            return jsonify(error=problem), 400
         flash(problem, "error")
         return render_template("upload.html", categories=CATEGORIES), 400
 
@@ -133,17 +196,25 @@ def upload():
 
     if len(saved_ids) == 1:
         flash("Document uploaded.", "ok")
-        return redirect(url_for("documents.view_document", doc_id=saved_ids[0]))
-    flash(f"{len(saved_ids)} documents uploaded.", "ok")
-    return redirect(url_for("documents.list_documents"))
+        where = url_for("documents.view_document", doc_id=saved_ids[0])
+    else:
+        flash(f"{len(saved_ids)} documents uploaded.", "ok")
+        where = url_for("documents.list_documents")
+    if wants_json:
+        return jsonify(redirect=where)
+    return redirect(where)
 
 
 @bp.route("/documents/<int:doc_id>")
 @login_required
 def view_document(doc_id):
     grants = []
+    starred = False
     with get_conn() as conn:
         doc = authorize(conn, g.user, doc_id, "read")
+        if doc is not None:
+            starred = conn.execute("SELECT 1 FROM stars WHERE user_id = %s AND document_id = %s",
+                                   (g.user["id"], doc_id)).fetchone() is not None
         if doc is not None and can(doc, "share"):
             grants = conn.execute(
                 "SELECT gr.id, u.username, u.full_name, gr.permission, gr.granted_at "
@@ -155,7 +226,7 @@ def view_document(doc_id):
     if doc is None:
         abort(404)
     return render_template(
-        "document.html", doc=doc, grants=grants, categories=CATEGORIES,
+        "document.html", doc=doc, grants=grants, categories=CATEGORIES, starred=starred,
         can_edit=can(doc, "edit"), can_share=can(doc, "share"),
         can_delete=can(doc, "delete"),
         can_open=doc["mime_type"] in PREVIEW_TYPES,
@@ -227,23 +298,48 @@ def open_document(doc_id):
 @bp.route("/documents/<int:doc_id>/edit", methods=["POST"])
 @login_required
 def edit(doc_id):
-    # Only title and category can change. Nothing else is read from the form.
+    # Only title, category and (optionally) a replacement file can change.
+    # Nothing else is read from the form.
     title = clean_title(request.form.get("title", ""))
     category = request.form.get("category", "")
+    new_file = request.files.get("file")
+    replacing = bool(new_file and new_file.filename)
 
     with get_conn() as conn:
         doc = authorize(conn, g.user, doc_id, "edit")
-        if doc is not None and title is not None and category in CATEGORIES:
-            conn.execute(
-                "UPDATE documents SET title = %s, category = %s, updated_at = now() "
-                "WHERE id = %s",
-                (title, category, doc_id),
-            )
-            audit.record(conn, "doc.edit", document_id=doc_id, detail=json.dumps({
-                "title": [doc["title"], title], "category": [doc["category"], category]}))
-            flash("Document updated.", "ok")
-        elif doc is not None:
-            flash("Title must be 1-120 characters and the category must be from the list.", "error")
+        if doc is not None:
+            problem = None
+            if title is None or category not in CATEGORIES:
+                problem = "Title must be 1-120 characters and the category must be from the list."
+            fresh = None
+            if problem is None and replacing:
+                try:
+                    fresh = uploads.check_upload(new_file)
+                except uploads.UploadError as error:
+                    problem = str(error)
+            if problem:
+                flash(problem, "error")
+            else:
+                detail = {"title": [doc["title"], title], "category": [doc["category"], category]}
+                if fresh:
+                    filename, mime_type, data = fresh
+                    sha256 = hashlib.sha256(data).hexdigest()
+                    conn.execute(
+                        "UPDATE documents SET title = %s, category = %s, filename = %s, "
+                        "mime_type = %s, size_bytes = %s, sha256 = %s, content = %s, "
+                        "updated_at = now() WHERE id = %s",
+                        (title, category, filename, mime_type, len(data), sha256, data, doc_id))
+                    detail["file"] = [doc["sha256"], sha256]
+                else:
+                    conn.execute(
+                        "UPDATE documents SET title = %s, category = %s, updated_at = now() "
+                        "WHERE id = %s", (title, category, doc_id))
+                audit.record(conn, "doc.edit", document_id=doc_id, detail=json.dumps(detail))
+                if doc["owner_id"] != g.user["id"]:
+                    notify.add(conn, doc["owner_id"],
+                               f"{g.user['full_name']} edited your document \"{title}\".",
+                               f"/documents/{doc_id}", doc_id)
+                flash("Document updated.", "ok")
     if doc is None:
         abort(404)
     return redirect(url_for("documents.view_document", doc_id=doc_id))
@@ -255,8 +351,11 @@ def delete(doc_id):
     with get_conn() as conn:
         doc = authorize(conn, g.user, doc_id, "delete")
         if doc is not None:
-            # Soft delete: hidden from everyone at once, kept for recovery.
-            conn.execute("UPDATE documents SET deleted_at = now() WHERE id = %s", (doc_id,))
+            # Soft delete: hidden from everyone at once and kept in the
+            # administrator's bin for 15 days.
+            conn.execute("UPDATE documents SET deleted_at = now(), deleted_by = %s WHERE id = %s",
+                         (g.user["id"], doc_id))
+            notify.clear_for_document(conn, doc_id)
             audit.record(conn, "doc.delete", document_id=doc_id,
                          detail=json.dumps({"title": doc["title"], "sha256": doc["sha256"]}))
     if doc is None:
@@ -275,7 +374,7 @@ def add_grant(doc_id):
         doc = authorize(conn, g.user, doc_id, "share")
         if doc is not None:
             target = conn.execute(
-                "SELECT id, username FROM users WHERE username = %s AND is_active",
+                "SELECT id, username, role FROM users WHERE username = %s AND is_active",
                 (username,),
             ).fetchone()
             if permission not in ("read", "edit"):
@@ -284,6 +383,8 @@ def add_grant(doc_id):
                 flash("There is no active user with that username.", "error")
             elif target["id"] == g.user["id"]:
                 flash("You already own this document.", "error")
+            elif target["role"] != "viewer":
+                flash("Documents can be shared only with viewers.", "error")
             else:
                 existing = conn.execute(
                     "SELECT id, permission FROM grants "
@@ -305,6 +406,12 @@ def add_grant(doc_id):
                     detail = permission
                 audit.record(conn, action, document_id=doc_id,
                              target_user_id=target["id"], detail=detail)
+                # The bell: the person who receives the document is told, deep-linked to it.
+                notify.clear_for_document(conn, doc_id, target["id"])
+                notify.add(conn, target["id"],
+                           f"{g.user['full_name']} shared \"{doc['title']}\" with you "
+                           f"({'can edit' if permission == 'edit' else 'can read'}).",
+                           f"/documents/{doc_id}", doc_id)
                 flash(f"{target['username']} now has {permission} access.", "ok")
     if doc is None:
         abort(404)
@@ -328,9 +435,13 @@ def revoke_grant(doc_id, grant_id):
             if row is not None:
                 audit.record(conn, "grant.revoke", document_id=doc_id,
                              target_user_id=row["user_id"])
+                notify.clear_for_document(conn, doc_id, row["user_id"])
                 flash("Access removed. It stops working immediately.", "ok")
             else:
                 flash("That grant was not found.", "error")
     if doc is None:
         abort(404)
+    nxt = request.form.get("next", "")
+    if nxt.startswith("/") and not nxt.startswith("//"):
+        return redirect(nxt)
     return redirect(url_for("documents.view_document", doc_id=doc_id))

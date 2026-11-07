@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Settings - TrustVault{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Settings</h1><p>Appearance and security for your account.</p></div></div>
+<section class="panel narrow">
+  <h2>Appearance</h2>
+  <div class="theme-choice">
+    <button type="button" data-theme-choice="light" aria-pressed="true">{{ icon('sun') }}Light</button>
+    <button type="button" data-theme-choice="dark" aria-pressed="false">{{ icon('moon') }}Dark</button>
+  </div>
+  <p class="muted-small">Your choice is remembered in this browser.</p>
+</section>
+<section class="panel narrow">
+  <h2>Change password</h2>
+  <form method="post" action="{{ url_for('accounts.change_password') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Current password
+      <input type="password" name="current_password" required maxlength="200" autocomplete="current-password">
+    </label>
+    <label>New password
+      <input type="password" name="new_password" required minlength="8" maxlength="200" autocomplete="new-password">
+    </label>
+    <p class="hint">At least 8 characters, with one capital letter, one number and one special character.</p>
+    <label>Confirm new password
+      <input type="password" name="confirm_password" required minlength="8" maxlength="200" autocomplete="new-password">
+    </label>
+    <button type="submit">Change password</button>
+    <p class="muted-small">After a change, you are signed out on all your other devices.</p>
+  </form>
+</section>
+{% endblock %}

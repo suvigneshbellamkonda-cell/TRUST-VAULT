@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Registered - TrustVault{% endblock %}
+{% block content %}
+<div class="success-mark">{{ icon('check') }}</div>
+<h1 class="login-title">Registered successfully</h1>
+<p class="muted">Your account has been created. Please sign in to continue.</p>
+<p><a class="button" href="{{ url_for('login') }}">Go to sign in</a></p>
+{% endblock %}

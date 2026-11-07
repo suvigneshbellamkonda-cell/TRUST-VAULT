@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}New password - TrustVault{% endblock %}
+{% block content %}
+<h1 class="login-title">Set a new password</h1>
+<form method="post" action="{{ url_for('accounts.forgot_new') }}" class="login-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>New password
+    <input type="password" name="password" required minlength="8" maxlength="200" autocomplete="new-password" autofocus>
+  </label>
+  <p class="hint">At least 8 characters, with one capital letter, one number and one special character.</p>
+  <label>Confirm new password
+    <input type="password" name="confirm_password" required minlength="8" maxlength="200" autocomplete="new-password">
+  </label>
+  <button type="submit">Change password</button>
+</form>
+<p class="muted">You will be signed out on every device after the change.</p>
+{% endblock %}

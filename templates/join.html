@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Join TrustVault{% endblock %}
+{% block content %}
+<h1 class="login-title">Create your {{ 'owner' if invite.role == 'owner' else 'viewer' }} account</h1>
+<p class="muted">You have been invited to TrustVault. This link can be used only once.</p>
+<form method="post" action="{{ url_for('accounts.join', token=request.view_args.token) }}" class="login-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Full name
+    <input type="text" name="full_name" value="{{ form.get('full_name') or invite.full_name }}" required maxlength="80" autofocus>
+  </label>
+  <label>Username
+    <input type="text" name="username" value="{{ form.get('username', '') }}" required minlength="3" maxlength="30" autocomplete="username">
+  </label>
+  <p class="hint">3-30 characters: lowercase letters, numbers and underscore.</p>
+  <label>E-mail
+    <input type="email" value="{{ invite.email }}" readonly>
+  </label>
+  <label>Password
+    <input type="password" name="password" required minlength="8" maxlength="200" autocomplete="new-password">
+  </label>
+  <p class="hint">At least 8 characters, with one capital letter, one number and one special character.</p>
+  <label>Confirm password
+    <input type="password" name="confirm_password" required minlength="8" maxlength="200" autocomplete="new-password">
+  </label>
+  <button type="submit">Register</button>
+</form>
+{% endblock %}

@@ -45,3 +45,17 @@ def role_required(*allowed_roles):
             return view(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def password_problem(password):
+    """Why a new password is not acceptable, or None when it is fine.
+    Rule: 8+ characters with a capital letter, a number and a special character."""
+    if not 8 <= len(password) <= 200:
+        return "Password must be 8 to 200 characters."
+    if not any(c.isupper() for c in password):
+        return "Password needs at least one capital letter."
+    if not any(c.isdigit() for c in password):
+        return "Password needs at least one number."
+    if all(c.isalnum() for c in password):
+        return "Password needs at least one special character, such as @ # ! or ?."
+    return None

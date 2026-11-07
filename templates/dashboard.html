@@ -1,41 +1,58 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon %}
 {% block title %}Overview - TrustVault{% endblock %}
 {% block content %}
-<div class="welcome">
-  <h1>Welcome, {{ g.user.full_name }}</h1>
-  <p>What would you like to do?</p>
-</div>
+<div class="welcome"><h1>Welcome, {{ g.user.full_name }}</h1>
+  <p>{{ {'admin': 'Here is the state of your TrustVault.', 'owner': 'Here is what is happening with your documents.', 'viewer': 'These are the documents owners have shared with you.'}[g.user.role] }}</p></div>
 
+{% if g.user.role == 'owner' %}
 <div class="big-actions">
-  <section class="big-action">
-    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg></div>
-    <h2>Open my documents</h2>
-    <p>Search, open and download the documents you own or that were shared with you.</p>
-    <div><a class="button" href="{{ url_for('documents.list_documents') }}">Documents</a></div>
-  </section>
-
-  {% if g.user.role == 'user' %}
-  <section class="big-action">
-    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg></div>
-    <h2>Upload a document</h2>
-    <p>Add a new file. Only you can open it until you give someone access.</p>
-    <div><a class="button secondary" href="{{ url_for('documents.upload_form') }}">Upload</a></div>
-  </section>
-  {% endif %}
-
-  {% if g.user.role == 'admin' %}
-  <section class="big-action">
-    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M17 5v6M14 8h6"/></svg></div>
-    <h2>Manage users</h2>
-    <p>Create accounts and switch them off or on.</p>
-    <div><a class="button secondary" href="{{ url_for('admin_users') }}">Users</a></div>
-  </section>
-  <section class="big-action">
-    <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
-    <h2>Read the audit trail</h2>
-    <p>See every action and every refused attempt, and check that nothing was altered.</p>
-    <div><a class="button secondary" href="{{ url_for('admin_audit.audit_view') }}">Audit trail</a></div>
-  </section>
-  {% endif %}
+  <section class="big-action"><div class="icon">{{ icon('doc') }}</div><h2>Open my documents</h2><p>Search, open, download and share the documents you own.</p>
+    <div><a class="button" href="{{ url_for('documents.list_documents') }}">My documents</a></div></section>
+  <section class="big-action"><div class="icon">{{ icon('up') }}</div><h2>Upload a document</h2><p>Add one or more files (up to 100 MB in total). Only you can open them until you share them.</p>
+    <div><a class="button secondary" href="{{ url_for('documents.upload_form') }}">Upload</a></div></section>
 </div>
+<div class="tiles">
+  <div class="tile"><b>{{ stats.count }}</b><span>Documents I own</span></div>
+  <div class="tile"><b>{{ stats.shared }}</b><span>Shared with viewers</span></div>
+  <div class="tile"><b>{{ stats.starred }}</b><span>Starred</span></div>
+</div>
+{% elif g.user.role == 'viewer' %}
+<div class="big-actions">
+  <section class="big-action"><div class="icon">{{ icon('share') }}</div><h2>Shared with me</h2><p>Open the documents owners have given you access to.</p>
+    <div><a class="button" href="{{ url_for('documents.list_documents') }}">Shared with me</a></div></section>
+  <section class="big-action"><div class="icon">{{ icon('star') }}</div><h2>Starred documents</h2><p>Your quick-access list.</p>
+    <div><a class="button secondary" href="{{ url_for('documents.starred') }}">Starred</a></div></section>
+</div>
+<div class="tiles">
+  <div class="tile"><b>{{ stats.count }}</b><span>Shared with me</span></div>
+  <div class="tile"><b>{{ stats.editable }}</b><span>I can edit</span></div>
+  <div class="tile"><b>{{ stats.starred }}</b><span>Starred</span></div>
+</div>
+{% else %}
+<div class="tiles">
+  <div class="tile"><b>{{ stats.owners }}</b><span>Owners</span></div>
+  <div class="tile"><b>{{ stats.viewers }}</b><span>Viewers</span></div>
+  <div class="tile"><b>{{ stats.documents }}</b><span>Documents</span></div>
+  <div class="tile"><b>{{ stats.bin }}</b><span>In the bin</span></div>
+  <div class="tile"><b>{{ stats.pending }}</b><span>Pending invitations</span></div>
+</div>
+<section class="panel"><h2>Latest activity</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Time (UTC)</th><th>User</th><th>Action</th><th>Result</th></tr>
+    {% for r in recent %}<tr class="row-{{ r.outcome }}"><td>{{ r.at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ r.actor_username or '-' }}</td><td>{{ r.action }}</td><td><span class="badge badge-{{ r.outcome }}">{{ r.outcome }}</span></td></tr>{% endfor %}
+  </table></div>
+  <a class="button secondary" href="{{ url_for('admin_audit.audit_view') }}">Open the audit record</a>
+</section>
+{% endif %}
+
+{% if g.user.role != 'admin' and recent %}
+<section class="panel"><h2>Recent documents</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Title</th><th>Category</th><th>{{ 'Owner' if g.user.role == 'viewer' else 'Uploaded' }}</th><th>Access</th></tr>
+    {% for d in recent %}<tr><td><a href="{{ url_for('documents.view_document', doc_id=d.id) }}">{{ d.title }}</a></td><td>{{ d.category }}</td>
+      <td>{{ d.owner_name if g.user.role == 'viewer' else d.created_at.strftime('%Y-%m-%d') }}</td><td><span class="badge badge-{{ d.access }}">{{ d.access }}</span></td></tr>{% endfor %}
+  </table></div>
+</section>
+{% endif %}
 {% endblock %}

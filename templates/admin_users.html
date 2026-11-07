@@ -2,62 +2,64 @@
 {% from "_macros.html" import person %}
 {% block title %}Users - TrustVault{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>Users</h1>
-    <p>Only an administrator can create accounts, including other administrators. Switching an account off ends its sessions at once.</p>
-  </div>
-</div>
-
-<div class="table-wrap">
-<table>
-  <tr><th>Username</th><th>Name</th><th>E-mail</th><th>Role</th><th>Status</th><th></th></tr>
-  {% for u in users %}
-  <tr>
-    <td>{{ person(u.username, True) }}</td>
-    <td>{{ u.full_name }}</td>
-    <td>{{ u.email or '' }}</td>
-    <td>{{ u.role }}</td>
-    <td><span class="badge badge-{{ 'active' if u.is_active else 'disabled' }}">{{ 'active' if u.is_active else 'disabled' }}</span></td>
-    <td>
-      {% if u.id != g.user.id %}
-      <form method="post" action="{{ url_for('toggle_user', user_id=u.id) }}" class="inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="small {{ 'danger outline' if u.is_active else 'secondary' }}">
-          {{ 'Disable' if u.is_active else 'Enable' }}
-        </button>
-      </form>
-      {% endif %}
-    </td>
-  </tr>
-  {% endfor %}
-</table>
-</div>
+<div class="page-head"><div><h1>Users</h1>
+  <p>Invite document owners, and switch accounts off or on. The administrator cannot reset anyone's password: people reset their own with "Forgot password".</p></div></div>
 
 <section class="panel">
-  <h2>Create a user</h2>
-  <form method="post" action="{{ url_for('create_user') }}">
+  <h2>Invite an owner</h2>
+  <form method="post" action="{{ url_for('accounts.admin_invite') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="form-grid">
-      <label>Username
-        <input type="text" name="username" required minlength="3" maxlength="30">
-      </label>
-      <label>Full name
-        <input type="text" name="full_name" required maxlength="80">
-      </label>
-      <label>E-mail
-        <input type="email" name="email" required maxlength="120">
-      </label>
-      <label>Role
-        <select name="role" required>
-          {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
-        </select>
-      </label>
-      <label>Password (at least 10 characters)
-        <input type="password" name="password" required minlength="10" maxlength="200" autocomplete="new-password">
-      </label>
+      <label>Full name<input type="text" name="full_name" required maxlength="80"></label>
+      <label>E-mail<input type="email" name="email" required maxlength="120"></label>
     </div>
-    <button type="submit">Create user</button>
+    <button type="submit">Invitation</button>
+    <p class="muted-small">An e-mail from TrustVault is sent with a link that works once and expires in 48 hours.</p>
   </form>
+</section>
+
+<section class="panel">
+  <h2>Invitations</h2>
+  <form method="get" class="filters">
+    <label>Status
+      <select name="istatus"><option value="">All</option>
+        {% for s in ('pending', 'accepted', 'expired') %}<option value="{{ s }}" {{ 'selected' if s == istatus }}>{{ s|capitalize }}</option>{% endfor %}
+      </select></label>
+    <input type="hidden" name="role" value="{{ role }}"><input type="hidden" name="state" value="{{ state }}"><input type="hidden" name="q" value="{{ q }}">
+    <div class="filter-actions"><button type="submit">Filter</button></div>
+  </form>
+  {% include "_invites.html" %}
+</section>
+
+<section class="panel">
+  <h2>Accounts</h2>
+  <form method="get" class="filters">
+    <label>Search<input type="text" name="q" value="{{ q }}" maxlength="80" placeholder="Name, username or e-mail"></label>
+    <label>Type
+      <select name="role"><option value="">All</option>
+        {% for r, label in (('owner', 'Owners'), ('viewer', 'Viewers'), ('admin', 'Administrator')) %}<option value="{{ r }}" {{ 'selected' if r == role }}>{{ label }}</option>{% endfor %}
+      </select></label>
+    <label>Status
+      <select name="state"><option value="">All</option>
+        <option value="active" {{ 'selected' if state == 'active' }}>Active</option>
+        <option value="disabled" {{ 'selected' if state == 'disabled' }}>Disabled</option>
+      </select></label>
+    <input type="hidden" name="istatus" value="{{ istatus }}">
+    <div class="filter-actions"><button type="submit">Filter</button></div>
+  </form>
+  <div class="table-wrap"><table>
+    <tr><th>Username</th><th>Name</th><th>E-mail</th><th>Type</th><th>Status</th><th></th></tr>
+    {% for u in users %}
+    <tr>
+      <td>{{ person(u.username, True) }}</td><td>{{ u.full_name }}</td><td>{{ u.email or '' }}</td><td>{{ u.role|capitalize }}</td>
+      <td><span class="badge badge-{{ 'active' if u.is_active else 'disabled' }}">{{ 'active' if u.is_active else 'disabled' }}</span></td>
+      <td>{% if u.id != g.user.id %}
+        <form method="post" action="{{ url_for('toggle_user', user_id=u.id) }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="small {{ 'danger outline' if u.is_active else '' }}">{{ 'Disable' if u.is_active else 'Enable' }}</button>
+        </form>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
 </section>
 {% endblock %}

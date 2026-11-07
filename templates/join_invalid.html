@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Invitation - TrustVault{% endblock %}
+{% block content %}
+<h1 class="login-title">This invitation cannot be used</h1>
+<p class="muted">The link is not valid, has expired, or has already been used. Each invitation works once. Please ask for a new invitation.</p>
+<p><a class="button" href="{{ url_for('login') }}">Go to sign in</a></p>
+{% endblock %}

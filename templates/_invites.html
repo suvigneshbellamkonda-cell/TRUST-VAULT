@@ -1,0 +1,9 @@
+{# Table of invitations. Needs: invites #}
+{% if invites %}
+<div class="table-wrap"><table>
+  <tr><th>Name</th><th>E-mail</th><th>Status</th><th>Sent (UTC)</th><th>Link expires (UTC)</th></tr>
+  {% for i in invites %}<tr><td>{{ i.full_name }}</td><td>{{ i.email }}</td>
+    <td><span class="pill {{ i.status }}">{{ i.status|capitalize }}</span></td>
+    <td>{{ i.created_at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ i.expires_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>{% endfor %}
+</table></div>
+{% else %}<div class="empty">No invitations match.</div>{% endif %}

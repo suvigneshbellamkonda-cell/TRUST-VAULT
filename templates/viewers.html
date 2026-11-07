@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "_macros.html" import person %}
+{% block title %}Viewers - TrustVault{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Viewers</h1>
+  <p>Invite the people you want to share documents with. A viewer sees only what you share.</p></div></div>
+<section class="panel">
+  <h2>Invite a viewer</h2>
+  <form method="post" action="{{ url_for('accounts.owner_invite') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-grid">
+      <label>Full name<input type="text" name="full_name" required maxlength="80"></label>
+      <label>E-mail<input type="email" name="email" required maxlength="120"></label>
+    </div>
+    <button type="submit">Invitation</button>
+    <p class="muted-small">An e-mail from TrustVault is sent with a link that works once and expires in 48 hours.</p>
+  </form>
+</section>
+<section class="panel">
+  <h2>My invitations</h2>
+  <form method="get" class="filters">
+    <label>Search<input type="text" name="q" value="{{ q }}" maxlength="80" placeholder="Name or e-mail"></label>
+    <label>Status
+      <select name="status"><option value="">All</option>
+        {% for s in ('pending', 'accepted', 'expired') %}<option value="{{ s }}" {{ 'selected' if s == status }}>{{ s|capitalize }}</option>{% endfor %}
+      </select></label>
+    <div class="filter-actions"><button type="submit">Filter</button></div>
+  </form>
+  {% set invites = invites %}{% include "_invites.html" %}
+</section>
+<section class="panel">
+  <h2>Viewers who joined</h2>
+  {% if people %}<div class="table-wrap"><table>
+    <tr><th>Username</th><th>Name</th><th>E-mail</th><th>Status</th></tr>
+    {% for p in people %}<tr><td>{{ person(p.username, True) }}</td><td>{{ p.full_name }}</td><td>{{ p.email }}</td>
+      <td><span class="badge badge-{{ 'active' if p.is_active else 'disabled' }}">{{ 'active' if p.is_active else 'disabled' }}</span></td></tr>{% endfor %}
+  </table></div>{% else %}<div class="empty">No viewer has joined yet.</div>{% endif %}
+</section>
+{% endblock %}

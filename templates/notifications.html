@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Notifications - TrustVault{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Notifications</h1><p>Select a notification to go straight to what happened.</p></div>
+  {% if unread %}
+  <form method="post" action="{{ url_for('accounts.notifications_read_all') }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="secondary">Mark all as read</button>
+  </form>
+  {% endif %}
+</div>
+{% if rows %}
+<div class="list-card">
+  {% for n in rows %}
+  <a class="notif {{ '' if n.read_at else 'unread' }}" href="{{ url_for('accounts.notification_go', note_id=n.id) }}">
+    <span class="dot"></span><span class="msg">{{ n.message }}</span><time>{{ n.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</time>
+  </a>
+  {% endfor %}
+</div>
+{% else %}<div class="empty">You have no notifications.</div>{% endif %}
+{% endblock %}

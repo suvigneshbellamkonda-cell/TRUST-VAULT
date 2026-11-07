@@ -1,16 +1,16 @@
 import os
-import re
-import secrets
 from datetime import timedelta
 
-import psycopg
 from flask import (Flask, abort, flash, g, redirect, render_template,
                    request, session, url_for)
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import audit
+import notify  # noqa: F401
+from accounts import bp as accounts_bp, invitation_rows
 from admin_audit import bp as admin_audit_bp
+from admin_pages import bp as admin_pages_bp
 from db import get_conn  # importing db also loads the .env file
 from documents import bp as documents_bp
 from security import check_csrf, csrf_token, login_required, role_required
@@ -25,7 +25,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",   # browser does not send it on cross-site POSTs
     SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),  # https only on Render
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
-    MAX_CONTENT_LENGTH=32 * 1024 * 1024,  # refuse any request over 32 MB (10 files, 30 MB in total, plus form data)
+    MAX_CONTENT_LENGTH=102 * 1024 * 1024,  # refuse any request over 102 MB (100 MB of files plus form data)
 )
 
 # Render puts a proxy in front of the app. This makes request.remote_addr the
@@ -35,21 +35,26 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.jinja_env.globals["csrf_token"] = csrf_token
 
 
-def setup_code():
-    """The secret that allows admin registration. Kept in the server settings,
-    never in the code. Empty (or too short) means registration is switched off."""
-    code = os.environ.get("SETUP_CODE", "")
-    return code if len(code) >= MIN_SETUP_CODE else ""
+@app.context_processor
+def bell():
+    """Number of unread notifications, shown on the bell on every page."""
+    if getattr(g, "user", None) is None:
+        return {"unread": 0, "alert_count": 0}
+    with get_conn() as conn:
+        unread = conn.execute("SELECT count(*) AS n FROM notifications "
+                              "WHERE user_id = %s AND read_at IS NULL", (g.user["id"],)).fetchone()["n"]
+        alerts = 0
+        if g.user["role"] == "admin":
+            from admin_pages import count_alerts
+            alerts = count_alerts(conn, g.user["id"])
+    return {"unread": unread, "alert_count": alerts}
 
 
-app.jinja_env.globals["registration_open"] = lambda: bool(setup_code())
 app.register_blueprint(documents_bp)
 app.register_blueprint(admin_audit_bp)
+app.register_blueprint(accounts_bp)
+app.register_blueprint(admin_pages_bp)
 
-ROLES = ("admin", "user")
-USERNAME_RE = re.compile(r"^[a-z0-9_]{3,30}$")
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-MIN_SETUP_CODE = 12      # a shorter setup code is treated as "registration off"
 
 MAX_FAILS_PER_USERNAME = 5
 MAX_FAILS_PER_IP = 20
@@ -180,108 +185,39 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ---------------------------------------------- admin registration
-
-def check_new_account(form, need_password=True):
-    """Validate the fields shared by admin registration and 'Create a user'.
-    Returns (clean_values, problem). problem is None when everything is fine."""
-    username = form.get("username", "").strip().lower()
-    full_name = form.get("full_name", "").strip()
-    email = form.get("email", "").strip().lower()
-    password = form.get("password", "")
-    values = {"username": username, "full_name": full_name, "email": email,
-              "password": password}
-
-    problem = None
-    if not 1 <= len(full_name) <= 80:
-        problem = "Full name must be 1-80 characters."
-    elif len(email) > 120 or not EMAIL_RE.match(email):
-        problem = "Enter a valid e-mail address."
-    elif not USERNAME_RE.match(username):
-        problem = "Username must be 3-30 characters: a-z, 0-9 and underscore."
-    elif not 10 <= len(password) <= 200:
-        problem = "Password must be at least 10 characters."
-    return values, problem
-
-
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    """Create an administrator. Needs the secret setup code, so a stranger cannot
-    make themselves an admin. Further admins are added by an existing admin
-    on the Users page."""
-    code = setup_code()
-    if not code:
-        abort(404)                      # switched off: the page does not exist
-    if g.user is not None:
-        return redirect(url_for("home"))
-    if request.method == "GET":
-        return render_template("register.html", form={})
-
-    ip = request.remote_addr or "unknown"
-    guess_key = f"register:{ip}"        # failed guesses are counted per address
-    sent = request.form.get("setup_code", "")[:200]
-    organisation = request.form.get("organisation", "").strip()
-    confirm = request.form.get("confirm_password", "")
-    form = {k: request.form.get(k, "")[:200] for k in
-            ("full_name", "email", "username", "organisation")}
-
-    with get_conn() as conn:
-        if too_many_failures(conn, guess_key, ip):
-            audit.record(conn, "register.locked", outcome="denied",
-                         actor_username=guess_key, detail="too many failures")
-            flash("Too many failed attempts. Try again in 15 minutes.", "error")
-            return render_template("register.html", form=form), 429
-
-        # The code is checked FIRST, before anything else is looked at.
-        if not secrets.compare_digest(sent.encode(), code.encode()):
-            conn.execute("INSERT INTO login_attempts (username, ip, success) "
-                         "VALUES (%s, %s, FALSE)", (guess_key, ip))
-            audit.record(conn, "register.fail", outcome="denied",
-                         actor_username=guess_key, detail="wrong setup code")
-            flash("The setup code is not correct.", "error")
-            return render_template("register.html", form=form), 403
-
-        values, problem = check_new_account(request.form)
-        if problem is None and not 1 <= len(organisation) <= 100:
-            problem = "Organisation name must be 1-100 characters."
-        if problem is None and values["password"] != confirm:
-            problem = "The two passwords are not the same."
-        if problem is None:
-            taken = conn.execute(
-                "SELECT 1 FROM users WHERE username = %s OR lower(email) = %s",
-                (values["username"], values["email"])).fetchone()
-            if taken:
-                problem = "That username or e-mail is already used."
-
-        if problem is None:
-            try:
-                new_user = conn.execute(
-                    "INSERT INTO users (username, full_name, password_hash, role, "
-                    "email, organisation) VALUES (%s, %s, %s, 'admin', %s, %s) "
-                    "RETURNING id",
-                    (values["username"], values["full_name"],
-                     generate_password_hash(values["password"]), values["email"],
-                     organisation)).fetchone()
-                audit.record(conn, "admin.register", actor_id=new_user["id"],
-                             actor_username=values["username"],
-                             target_user_id=new_user["id"],
-                             detail=f"organisation={organisation}"[:200])
-            except psycopg.errors.UniqueViolation:
-                problem = "That username or e-mail is already used."
-
-    if problem:
-        flash(problem, "error")
-        return render_template("register.html", form=form), 400
-    flash("Administrator account created. You can sign in now.", "ok")
-    return redirect(url_for("login"))
-
-
 # ------------------------------------------------------------- pages
 
 @app.route("/")
 @login_required
 def home():
-    return render_template("dashboard.html")
+    from authz import visible_documents
+    stats, recent = {}, []
+    with get_conn() as conn:
+        role, uid = g.user["role"], g.user["id"]
+        if role == "admin":
+            q = lambda sql: conn.execute(sql).fetchone()["n"]
+            stats = {
+                "owners": q("SELECT count(*) AS n FROM users WHERE role = 'owner'"),
+                "viewers": q("SELECT count(*) AS n FROM users WHERE role = 'viewer'"),
+                "documents": q("SELECT count(*) AS n FROM documents WHERE deleted_at IS NULL"),
+                "bin": q("SELECT count(*) AS n FROM documents WHERE deleted_at IS NOT NULL"),
+                "pending": q("SELECT count(*) AS n FROM invitations WHERE used_at IS NULL AND expires_at > now()"),
+            }
+            recent = conn.execute(
+                "SELECT at, actor_username, action, outcome FROM audit_log ORDER BY id DESC LIMIT 6").fetchall()
+        else:
+            mine = visible_documents(conn, g.user, scope="mine" if role == "owner" else "shared")
+            stats = {"count": len(mine),
+                     "starred": len(visible_documents(conn, g.user, starred_only=True))}
+            if role == "owner":
+                stats["shared"] = conn.execute(
+                    "SELECT count(DISTINCT g.document_id) AS n FROM grants g JOIN documents d "
+                    "ON d.id = g.document_id WHERE d.owner_id = %s AND d.deleted_at IS NULL "
+                    "AND g.revoked_at IS NULL", (uid,)).fetchone()["n"]
+            else:
+                stats["editable"] = len([d for d in mine if d["access"] == "edit"])
+            recent = mine[:5]
+    return render_template("dashboard.html", stats=stats, recent=recent)
 
 
 @app.route("/health")
@@ -302,44 +238,27 @@ def health():
 @login_required
 @role_required("admin")
 def admin_users():
+    role = request.args.get("role", "")
+    state = request.args.get("state", "")
+    q = request.args.get("q", "").strip()[:80]
+    istatus = request.args.get("istatus", "")
+    where, params = ["TRUE"], {}
+    if role in ("owner", "viewer", "admin"):
+        where.append("role = %(role)s")
+        params["role"] = role
+    if state in ("active", "disabled"):
+        where.append("is_active = %(active)s")
+        params["active"] = state == "active"
+    if q:
+        where.append("(full_name ILIKE %(q)s OR username ILIKE %(q)s OR email ILIKE %(q)s)")
+        params["q"] = "%" + q.replace("%", "").replace("_", "") + "%"
     with get_conn() as conn:
         users = conn.execute(
             "SELECT id, username, full_name, email, role, is_active, created_at "
-            "FROM users ORDER BY id"
-        ).fetchall()
-    return render_template("admin_users.html", users=users, roles=ROLES)
-
-
-@app.route("/admin/users", methods=["POST"])
-@login_required
-@role_required("admin")
-def create_user():
-    # Only these five fields are read from the form. Anything else the
-    # browser sends is ignored. The new account joins the creator's organisation.
-    values, problem = check_new_account(request.form)
-    role = request.form.get("role", "")
-    if problem is None and role not in ROLES:
-        problem = "Choose a valid role."
-
-    if problem is None:
-        try:
-            with get_conn() as conn:
-                new_user = conn.execute(
-                    "INSERT INTO users (username, full_name, password_hash, role, "
-                    "email, organisation) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-                    (values["username"], values["full_name"],
-                     generate_password_hash(values["password"]), role,
-                     values["email"], g.user["organisation"]),
-                ).fetchone()
-                audit.record(conn, "user.create", target_user_id=new_user["id"],
-                             detail=f"username={values['username']} role={role}")
-            flash(f"User {values['username']} created.", "ok")
-        except psycopg.errors.UniqueViolation:
-            problem = "That username or e-mail is already taken."
-
-    if problem:
-        flash(problem, "error")
-    return redirect(url_for("admin_users"))
+            "FROM users WHERE " + " AND ".join(where) + " ORDER BY id", params).fetchall()
+        invites = invitation_rows(conn, None, istatus, "")
+    return render_template("admin_users.html", users=users, invites=invites,
+                           role=role, state=state, q=q, istatus=istatus)
 
 
 @app.route("/admin/users/<int:user_id>/toggle", methods=["POST"])
@@ -407,7 +326,7 @@ def error_page(error):
     messages = {
         400: "Bad request.",
         404: "Page not found.",
-        413: "That upload is too large (up to 10 MB per file and 30 MB in total).",
+        413: "That upload is too large (the limit is 100 MB in total).",
         500: "Something went wrong.",
     }
     # Never show the real error text or a stack trace to visitors.

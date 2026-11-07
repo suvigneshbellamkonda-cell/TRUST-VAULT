@@ -6,6 +6,8 @@ import zipfile
 
 import pytest
 
+import uploads
+
 from helpers import (active_grant_id, csrf, give, login, make_doc, make_user, post,
                      query, text, unique, upload)
 
@@ -19,7 +21,7 @@ def secret(app):
     alice = login(app, "alice")
     title = unique("secret")
     doc = make_doc(alice, title=title, data=b"TOP SECRET PLAN")
-    grantee, _ = make_user()
+    grantee, _ = make_user(role="viewer")
     assert give(alice, doc, grantee, "read").status_code == 302
     return {"doc": doc, "title": title, "gid": active_grant_id(doc, grantee)}
 
@@ -95,23 +97,30 @@ def test_refused_attempt_is_written_to_the_audit_log(app, secret):
 
 # ------------------------------------------------------------------ who can upload
 
-def test_every_user_can_upload_but_admin_cannot(alice, bob, carol, dave, admin):
-    assert admin.get("/documents/upload").status_code == 404
-    assert upload(admin).status_code == 404
-    for person in (alice, bob, carol, dave):          # every ordinary user
+def test_only_owners_can_upload(alice, bob, carol, dave, admin):
+    for outsider in (admin, carol, dave):             # administrator and viewers
+        assert outsider.get("/documents/upload").status_code == 404
+        assert upload(outsider).status_code == 404
+    for person in (alice, bob):                        # owners
         assert person.get("/documents/upload").status_code == 200
 
 
-def test_whoever_uploads_owns_the_file_and_can_share_it(carol, dave, bob):
-    title = unique("viewerdoc")
-    doc = make_doc(carol, title=title, data=b"CAROLS FILE")
+def test_an_owner_owns_the_file_and_can_share_it_with_a_viewer(bob, dave, alice):
+    title = unique("ownerdoc")
+    doc = make_doc(bob, title=title, data=b"BOBS FILE")
     assert query("SELECT u.username FROM documents d JOIN users u ON u.id = d.owner_id "
-                 "WHERE d.id = %s", doc)[0]["username"] == "carol"
+                 "WHERE d.id = %s", doc)[0]["username"] == "bob"
     assert dave.get(f"/documents/{doc}").status_code == 404           # nobody else sees it
-    assert give(carol, doc, "dave", "read").status_code == 302         # she can share it
-    assert dave.get(f"/documents/{doc}/download").data == b"CAROLS FILE"
-    assert post(dave, f"/documents/{doc}/delete").status_code == 404   # dave still cannot delete
-    assert post(carol, f"/documents/{doc}/delete").status_code == 302  # she can
+    assert give(bob, doc, "dave", "read").status_code == 302           # he can share it
+    assert dave.get(f"/documents/{doc}/download").data == b"BOBS FILE"
+    assert post(dave, f"/documents/{doc}/delete").status_code == 404   # dave cannot delete
+    assert post(bob, f"/documents/{doc}/delete").status_code == 302    # bob can
+
+
+def test_documents_can_be_shared_only_with_viewers(alice, bob):
+    doc = make_doc(alice, title=unique("viewersonly"))
+    give(alice, doc, "bob", "read")                                    # bob is an owner
+    assert active_grant_id(doc, "bob") is None
 
 
 def test_owner_is_always_the_logged_in_user(alice):
@@ -241,7 +250,7 @@ def test_changing_a_grant_updates_it_instead_of_adding_another(alice):
 
 
 def test_grant_for_a_user_who_is_later_disabled_stops_working(app, alice, admin):
-    username, password = make_user(role="user")
+    username, password = make_user(role="viewer")
     doc = make_doc(alice, title=unique("disable"))
     give(alice, doc, username, "read")
     from helpers import try_login
@@ -360,24 +369,26 @@ def test_title_and_category_are_checked(alice):
     assert upload(alice, category="Hacking").status_code == 400
 
 
-def test_file_over_10_mb_is_refused(alice):
+def test_there_is_no_limit_per_file(alice):
     title = unique("big")
-    response = upload(alice, title=title, data=b"a" * (10 * 1024 * 1024 + 1))
+    response = upload(alice, title=title, name="big.txt", data=b"a" * (12 * 1024 * 1024))
+    assert response.status_code == 302
+
+
+def test_a_file_over_the_total_limit_is_refused_with_a_clear_message(alice, monkeypatch):
+    monkeypatch.setattr(uploads, "MAX_BATCH_BYTES", 1024 * 1024)       # a small limit, to keep the test quick
+    title = unique("toobig")
+    response = upload(alice, title=title, data=b"a" * (1024 * 1024 + 1))
     assert response.status_code == 400
+    assert "more than 100 MB" in text(response)
     assert query("SELECT count(*) n FROM documents WHERE title = %s", title)[0]["n"] == 0
 
 
-def test_single_file_over_10_mb_is_refused_with_a_clear_message(alice):
-    response = upload(alice, data=b"a" * (12 * 1024 * 1024))
-    assert response.status_code == 400
-    assert "larger than 10 MB" in text(response)
-
-
-def test_request_over_32_mb_gets_the_413_page(alice):
-    response = upload(alice, data=b"a" * (33 * 1024 * 1024))
+def test_a_request_over_the_cap_gets_the_413_page(app, alice, monkeypatch):
+    monkeypatch.setitem(app.config, "MAX_CONTENT_LENGTH", 1024 * 1024)
+    response = upload(alice, title=unique("huge"), data=b"a" * (2 * 1024 * 1024))
     assert response.status_code == 413
-    assert "Traceback" not in text(response)
-    assert "30 MB in total" in text(response)
+    assert "100 MB in total" in text(response)
 
 
 # ------------------------------------------------------------------ several files at once
@@ -425,11 +436,11 @@ def test_a_too_long_typed_title_is_refused_for_several_files(alice):
     assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", "%" + stem + "%")[0]["n"] == 0
 
 
-def test_eleven_files_are_refused_and_none_are_saved(alice):
+def test_fifty_one_files_are_refused_and_none_are_saved(alice):
     stem = unique("toomany")
-    response = upload_many(alice, [(f"{stem}-{n}.txt", b"x") for n in range(11)])
+    response = upload_many(alice, [(f"{stem}-{n}.txt", b"x") for n in range(51)])
     assert response.status_code == 400
-    assert "at most 10 files" in text(response)
+    assert "at most 50 files" in text(response)
     assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", stem + "%")[0]["n"] == 0
 
 
@@ -451,19 +462,21 @@ def test_one_bad_file_means_none_are_saved_and_the_bad_one_is_named(alice):
     assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", stem + "%")[0]["n"] == 0
 
 
-def test_files_over_30_mb_together_are_refused(alice):
+def test_files_over_the_total_limit_together_are_refused(alice, monkeypatch):
+    monkeypatch.setattr(uploads, "MAX_BATCH_BYTES", 1024 * 1024)
     stem = unique("heavy")
-    chunk = b"a" * int(7.8 * 1024 * 1024)       # four of these are 31.2 MB: under the 32 MB request cap
-    response = upload_many(alice, [(f"{stem}-{n}.txt", chunk) for n in range(4)])
+    chunk = b"a" * (600 * 1024)
+    response = upload_many(alice, [(f"{stem}-{n}.txt", chunk) for n in range(3)])
     assert response.status_code == 400
-    assert "30 MB together" in text(response)
+    assert "100 MB together" in text(response)
     assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", stem + "%")[0]["n"] == 0
 
 
-def test_admin_cannot_upload_several_files_but_a_user_can(carol, admin):
+def test_admin_and_viewers_cannot_upload_several_files_but_an_owner_can(carol, admin, bob):
     assert upload_many(admin, [("a.txt", b"x"), ("b.txt", b"y")]).status_code == 404
-    stem = unique("viewerbatch")
-    assert upload_many(carol, [(f"{stem}-a.txt", b"x"), (f"{stem}-b.txt", b"y")]).status_code == 302
+    assert upload_many(carol, [("a.txt", b"x"), ("b.txt", b"y")]).status_code == 404
+    stem = unique("ownerbatch")
+    assert upload_many(bob, [(f"{stem}-a.txt", b"x"), (f"{stem}-b.txt", b"y")]).status_code == 302
     assert query("SELECT count(*) n FROM documents WHERE title LIKE %s", stem + "%")[0]["n"] == 2
 
 

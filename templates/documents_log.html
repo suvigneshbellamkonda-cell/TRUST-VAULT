@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Documents log - TrustVault{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Documents log</h1><p>Every document in TrustVault, with its details only. The administrator cannot read the contents.</p></div></div>
+<form method="get" class="card filters">
+  <label>Title<input type="text" name="title" value="{{ title }}" maxlength="120"></label>
+  <label>Owner<input type="text" name="owner" value="{{ owner }}" maxlength="80"></label>
+  <label>Category<select name="category"><option value="">All</option>
+    {% for c in categories %}<option value="{{ c }}" {{ 'selected' if c == category }}>{{ c }}</option>{% endfor %}</select></label>
+  <label>Status<select name="state"><option value="">All</option>
+    <option value="active" {{ 'selected' if state == 'active' }}>Active</option><option value="deleted" {{ 'selected' if state == 'deleted' }}>Deleted</option></select></label>
+  <label>From<input type="text" name="date_from" value="{{ date_from }}" maxlength="10" placeholder="YYYY-MM-DD"></label>
+  <label>To<input type="text" name="date_to" value="{{ date_to }}" maxlength="10" placeholder="YYYY-MM-DD"></label>
+  <div class="filter-actions"><button type="submit">Filter</button></div>
+</form>
+{% if docs %}
+<div class="table-wrap"><table>
+  <tr><th>Title</th><th>Owner</th><th>Category</th><th>Size</th><th>Shared with</th><th>Uploaded (UTC)</th><th>Status</th></tr>
+  {% for d in docs %}<tr><td>{{ d.title }}</td><td>{{ d.owner_name }}</td><td>{{ d.category }}</td><td>{{ d.size_bytes|filesizeformat }}</td>
+    <td>{{ d.shares }}</td><td>{{ d.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td><span class="badge badge-{{ 'disabled' if d.deleted_at else 'active' }}">{{ 'deleted' if d.deleted_at else 'active' }}</span></td></tr>{% endfor %}
+</table></div>
+{% else %}<div class="empty">No documents match.</div>{% endif %}
+{% endblock %}

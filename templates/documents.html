@@ -1,47 +1,49 @@
 {% extends "base.html" %}
-{% block title %}Documents - TrustVault{% endblock %}
+{% from "_macros.html" import icon, star_button %}
+{% block title %}{{ heading or ('My documents' if g.user.role == 'owner' else 'Shared with me') }} - TrustVault{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Documents</h1>
-    <p>Only documents you own or that were shared with you appear here.</p>
+    <h1>{{ heading or ('My documents' if g.user.role == 'owner' else 'Shared with me') }}</h1>
+    <p>{% if heading %}Documents you marked with a star.{% elif g.user.role == 'owner' %}Documents you have uploaded. Share them with viewers whenever you need.{% else %}Only documents an owner has given you access to appear here.{% endif %}</p>
   </div>
-  {% if g.user.role == 'user' %}
-    <a class="button" href="{{ url_for('documents.upload_form') }}">Upload a document</a>
-  {% endif %}
+  {% if g.user.role == 'owner' %}<a class="button" href="{{ url_for('documents.upload_form') }}">Upload a document</a>{% endif %}
 </div>
 
-<form method="get" action="{{ url_for('documents.list_documents') }}" class="card filters">
-  <label>Title contains
-    <input type="text" name="title" value="{{ title }}" maxlength="120">
-  </label>
+{% if not simple %}
+<form method="get" class="card filters">
+  <label>Title contains<input type="text" name="title" value="{{ title }}" maxlength="120"></label>
   <label>Category
-    <select name="category">
-      <option value="">All</option>
+    <select name="category"><option value="">All</option>
       {% for c in categories %}<option value="{{ c }}" {{ 'selected' if c == category }}>{{ c }}</option>{% endfor %}
     </select>
   </label>
-  <label>Owner
-    <input type="text" name="owner" value="{{ owner }}" maxlength="80">
+  {% if g.user.role == 'viewer' %}
+  <label>Owner<input type="text" name="owner" value="{{ owner }}" maxlength="80"></label>
+  <label>My access
+    <select name="access"><option value="">All</option>
+      <option value="read" {{ 'selected' if access == 'read' }}>Can read</option>
+      <option value="edit" {{ 'selected' if access == 'edit' }}>Can edit</option>
+    </select>
   </label>
-  <label>Uploaded from
-    <input type="text" name="date_from" value="{{ date_from }}" maxlength="10" placeholder="YYYY-MM-DD">
-  </label>
-  <label>Uploaded to
-    <input type="text" name="date_to" value="{{ date_to }}" maxlength="10" placeholder="YYYY-MM-DD">
-  </label>
+  {% endif %}
+  <label>Uploaded from<input type="text" name="date_from" value="{{ date_from }}" maxlength="10" placeholder="YYYY-MM-DD"></label>
+  <label>Uploaded to<input type="text" name="date_to" value="{{ date_to }}" maxlength="10" placeholder="YYYY-MM-DD"></label>
   <div class="filter-actions">
     <button type="submit">Search</button>
-    {% if searching %}<a href="{{ url_for('documents.list_documents') }}">Clear search</a>{% endif %}
+    {% if searching %}<a href="{{ request.path }}">Clear search</a>{% endif %}
   </div>
 </form>
+{% endif %}
 
+<!-- results -->
 {% if docs %}
 <div class="doc-grid">
   {% for d in docs %}
   <article class="doc-card">
+    {{ star_button(d.id, d.starred, request.full_path.rstrip('?')) }}
     <div class="doc-card-top">
-      <span class="doc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg></span>
+      <span class="doc-icon">{{ icon('doc') }}</span>
       <span class="badge badge-{{ d.access }}">{{ d.access }}</span>
     </div>
     <div>
@@ -54,7 +56,9 @@
 </div>
 {% elif searching %}
   <div class="empty">No documents you can open match that search. Try fewer words or clear the search.</div>
+{% elif heading %}
+  <div class="empty">You have not starred any document yet. Use the star on a document to add it here.</div>
 {% else %}
-  <div class="empty">You have no documents yet. Documents appear here when you upload them or when someone shares one with you.</div>
+  <div class="empty">{{ 'You have no documents yet. Upload one to get started.' if g.user.role == 'owner' else 'Nothing has been shared with you yet. You will be notified when an owner shares a document.' }}</div>
 {% endif %}
 {% endblock %}

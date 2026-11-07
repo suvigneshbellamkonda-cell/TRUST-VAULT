@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% from "_macros.html" import person %}
+{% from "_macros.html" import person, star_button, back %}
 {% block title %}{{ doc.title }} - TrustVault{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <a class="backlink" href="{{ url_for('documents.list_documents') }}">&larr; Documents</a>
+    {{ back(url_for('documents.list_documents')) }}
     <h1>{{ doc.title }}</h1>
     <p>{{ doc.category }} · <span class="badge badge-{{ doc.access }}">{{ doc.access }}</span></p>
   </div>
-  <div>
+  <div class="button-row">
+    {{ star_button(doc.id, starred, url_for('documents.view_document', doc_id=doc.id)) }}
     {% if can_open %}<a class="button" href="{{ url_for('documents.open_document', doc_id=doc.id) }}" target="_blank" rel="noopener">Open</a>{% endif %}
     <a class="button{{ ' secondary' if can_open }}" href="{{ url_for('documents.download', doc_id=doc.id) }}">Download</a>
-    <a class="button secondary" href="{{ url_for('documents.list_documents') }}">Back to documents</a>
   </div>
 </div>
 
@@ -28,20 +28,20 @@
 
 {% if can_edit %}
 <section class="panel">
-  <h2>Edit details</h2>
-  <form method="post" action="{{ url_for('documents.edit', doc_id=doc.id) }}">
+  <h2>Edit document</h2>
+  <form method="post" action="{{ url_for('documents.edit', doc_id=doc.id) }}" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="form-grid">
-      <label>Title
-        <input type="text" name="title" value="{{ doc.title }}" required maxlength="120">
-      </label>
+      <label>Title<input type="text" name="title" value="{{ doc.title }}" required maxlength="120"></label>
       <label>Category
         <select name="category" required>
           {% for c in categories %}<option value="{{ c }}" {{ 'selected' if c == doc.category }}>{{ c }}</option>{% endfor %}
         </select>
       </label>
     </div>
+    <label>Replace the file (optional)<input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.txt,.csv,.docx,.xlsx"></label>
     <button type="submit">Save changes</button>
+    <p class="muted-small">Every change is recorded in the audit record.</p>
   </form>
 </section>
 {% endif %}
@@ -50,9 +50,8 @@
 <section class="panel">
   <h2>Who has access</h2>
   {% if grants %}
-  <div class="table-wrap">
-  <table>
-    <tr><th>User</th><th>Access</th><th>Since (UTC)</th><th></th></tr>
+  <div class="table-wrap"><table>
+    <tr><th>Viewer</th><th>Access</th><th>Since (UTC)</th><th></th></tr>
     {% for gr in grants %}
     <tr>
       <td>{{ person(gr.full_name, True) }} <span class="muted">({{ gr.username }})</span></td>
@@ -66,27 +65,22 @@
       </td>
     </tr>
     {% endfor %}
-  </table>
-  </div>
-  {% else %}
-    <p class="muted">Only you can open this document.</p>
-  {% endif %}
+  </table></div>
+  {% else %}<p class="muted">Only you can open this document.</p>{% endif %}
 
-  <h2 style="margin-top:22px">Give access</h2>
+  <h2>Share with a viewer</h2>
   <form method="post" action="{{ url_for('documents.add_grant', doc_id=doc.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="form-grid">
-      <label>Username
-        <input type="text" name="username" required maxlength="50">
-      </label>
+      <label>Viewer's username<input type="text" name="username" required maxlength="50"></label>
       <label>Access
         <select name="permission" required>
           <option value="read">read (view and download)</option>
-          <option value="edit">edit (read, plus change title and category)</option>
+          <option value="edit">edit (read, plus change title, category or file)</option>
         </select>
       </label>
     </div>
-    <button type="submit">Give access</button>
+    <button type="submit">Share</button>
   </form>
 </section>
 {% endif %}
@@ -94,7 +88,7 @@
 {% if can_delete %}
 <section class="panel danger-zone">
   <h2>Delete</h2>
-  <p class="muted">The document disappears for everyone straight away. The deletion is recorded in the audit trail.</p>
+  <p class="muted">The document disappears for everyone straight away. The administrator keeps it in the bin for 15 days and can restore it. The deletion is recorded in the audit record.</p>
   <form method="post" action="{{ url_for('documents.delete', doc_id=doc.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="check"><input type="checkbox" name="confirm" required> <span>I want to delete this document for everyone</span></label>

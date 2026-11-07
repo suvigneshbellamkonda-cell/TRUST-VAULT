@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Forgot password - TrustVault{% endblock %}
+{% block content %}
+<h1 class="login-title">Forgot password</h1>
+<p class="muted">Enter the e-mail address of your account. We will send you a one-time code.</p>
+<form method="post" action="{{ url_for('accounts.forgot') }}" class="login-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>E-mail
+    <input type="email" name="email" required maxlength="120" autocomplete="email" autofocus>
+  </label>
+  <button type="submit">Send code</button>
+</form>
+<p class="login-alt"><a href="{{ url_for('login') }}">&larr; Back to sign in</a></p>
+{% endblock %}

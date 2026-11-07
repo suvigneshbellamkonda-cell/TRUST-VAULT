@@ -65,7 +65,8 @@ def _like(text):
 
 
 def visible_documents(conn, user, title=None, category=None, owner=None,
-                      date_from=None, date_to=None):
+                      date_from=None, date_to=None, scope=None, starred_only=False,
+                      access=None, limit=None):
     """Every document this user owns or holds an active grant for, optionally
     narrowed by search. The access rule is part of the SAME query as the
     search, so a search can never return a document the user may not open.
@@ -90,16 +91,27 @@ def visible_documents(conn, user, title=None, category=None, owner=None,
     if date_to:
         where.append("d.created_at < (%(date_to)s::date + 1)")
         params["date_to"] = date_to
+    if scope == "mine":
+        where.append("d.owner_id = %(uid)s")
+    elif scope == "shared":
+        where.append("d.owner_id <> %(uid)s")
+    if starred_only:
+        where.append("s.user_id IS NOT NULL")
+    if access in ("read", "edit"):
+        where.append("g.permission = %(access)s AND d.owner_id <> %(uid)s")
+        params["access"] = access
 
     return conn.execute(
         "SELECT d.id, d.title, d.category, d.filename, d.size_bytes, d.created_at, "
         "       u.full_name AS owner_name, "
-        "       CASE WHEN d.owner_id = %(uid)s THEN 'owner' ELSE g.permission END AS access "
+        "       CASE WHEN d.owner_id = %(uid)s THEN 'owner' ELSE g.permission END AS access, "
+        "       (s.user_id IS NOT NULL) AS starred "
         "FROM documents d "
         "JOIN users u ON u.id = d.owner_id "
         "LEFT JOIN grants g ON g.document_id = d.id AND g.user_id = %(uid)s "
         "                  AND g.revoked_at IS NULL "
+        "LEFT JOIN stars s ON s.document_id = d.id AND s.user_id = %(uid)s "
         "WHERE " + " AND ".join(where) + " "
-        "ORDER BY d.created_at DESC",
+        "ORDER BY d.created_at DESC" + (" LIMIT %d" % limit if limit else ""),
         params,
     ).fetchall()

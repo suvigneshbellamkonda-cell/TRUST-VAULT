@@ -14,10 +14,10 @@ from db import get_conn
 DEMO_USERS = [
     # username,  full name,       role,    password
     ("admin",    "Asha Admin",    "admin", "Admin@TV2026"),
-    ("alice",    "Alice Rao",     "user",  "Alice@TV2026"),
-    ("bob",      "Bob Nair",      "user",  "Bob@TV2026"),
-    ("carol",    "Carol Das",     "user",  "Carol@TV2026"),
-    ("dave",     "Dave Iyer",     "user",  "Dave@TV2026"),
+    ("alice",    "Alice Rao",     "owner",  "Alice@TV2026"),
+    ("bob",      "Bob Nair",      "owner",  "Bob@TV2026"),
+    ("carol",    "Carol Das",     "viewer", "Carol@TV2026"),
+    ("dave",     "Dave Iyer",     "viewer", "Dave@TV2026"),
 ]
 DEMO_ORGANISATION = "TrustVault Demo"
 
@@ -39,6 +39,7 @@ def main():
                 VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (username) DO UPDATE
                 SET full_name = EXCLUDED.full_name,
+                    role = EXCLUDED.role,
                     email = COALESCE(users.email, EXCLUDED.email),
                     organisation = COALESCE(users.organisation, EXCLUDED.organisation)
                 """,

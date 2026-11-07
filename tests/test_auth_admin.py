@@ -127,54 +127,16 @@ def test_health_check(anon):
 def test_only_admin_can_manage_users(alice, bob, carol, dave):
     for client in (alice, bob, carol, dave):
         assert client.get("/admin/users").status_code == 404
-        assert post(client, "/admin/users", username="evil", full_name="Evil",
-                    email="evil@example.com", role="admin",
-                    password="long-enough-pass").status_code == 404
+        assert post(client, "/admin/invitations", full_name="Evil",
+                    email="evil@example.com").status_code == 404
         assert post(client, "/admin/users/1/toggle").status_code == 404
-    assert query("SELECT count(*) n FROM users WHERE username = 'evil'")[0]["n"] == 0
+    assert query("SELECT count(*) n FROM invitations WHERE email = 'evil@example.com'")[0]["n"] == 0
 
 
-def test_admin_creates_a_user_who_can_log_in(app, admin):
-    username = "t_" + unique("n")[-8:].replace("-", "")
-    response = post(admin, "/admin/users", username=username, full_name="New Person",
-                    email=f"{username}@example.com", role="user", password="a-long-password-1",
-                    is_active="false", session_version="99")        # forged extras
-    assert response.status_code == 302
-    row = query("SELECT role, is_active, session_version, email FROM users WHERE username = %s", username)[0]
-    assert row["role"] == "user" and row["is_active"] is True and row["session_version"] != 99
-    assert row["email"] == f"{username}@example.com"
-    assert try_login(app, username, "a-long-password-1")[1].status_code == 302
-    assert query("SELECT count(*) n FROM audit_log WHERE action = 'user.create' "
-                 "AND detail LIKE %s", f"%{username}%")[0]["n"] == 1
-
-
-def test_bad_new_user_input_is_refused_with_a_message(admin):
-    good = {"username": "t_okname1", "full_name": "Ok", "email": "ok@example.com",
-            "role": "user", "password": "long-enough-pass"}
-    bad_cases = [
-        ({"username": "AB"}, "Username must be"),                      # too short
-        ({"username": "has space"}, "Username must be"),
-        ({"username": "x'; DROP TABLE users;--"}, "Username must be"),
-        ({"role": "superadmin"}, "valid role"),                        # not a real role
-        ({"password": "short"}, "at least 10"),
-        ({"full_name": ""}, "Full name"),
-        ({"email": "not-an-email"}, "valid e-mail"),
-        ({"email": ""}, "valid e-mail"),
-    ]
-    for change, message in bad_cases:
-        response = admin.post("/admin/users", follow_redirects=True,
-                              data={**good, **change, "csrf_token": csrf(admin)})
-        assert response.status_code == 200 and message in text(response), change
-    assert query("SELECT count(*) n FROM users WHERE username = 't_okname1'")[0]["n"] == 0
-    assert query("SELECT count(*) n FROM users")[0]["n"] >= 5          # table still there
-
-
-def test_duplicate_username_is_refused(admin):
-    response = admin.post("/admin/users", follow_redirects=True, data={
-        "csrf_token": csrf(admin), "username": "alice", "full_name": "Another Alice",
-        "email": "another@example.com", "role": "user", "password": "long-enough-pass"})
-    assert "already taken" in text(response)
-    assert query("SELECT count(*) n FROM users WHERE username = 'alice'")[0]["n"] == 1
+def test_the_old_create_user_and_register_pages_are_gone(admin, anon):
+    assert post(admin, "/admin/users", username="x", full_name="X", email="x@example.com",
+                role="admin", password="Long-enough-1!").status_code in (404, 405)
+    assert anon.get("/register").status_code == 404
 
 
 def test_admin_cannot_disable_their_own_account(admin):

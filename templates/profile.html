@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Profile - TrustVault{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Profile</h1><p>Your account details.</p></div></div>
+<section class="panel narrow">
+  <dl class="facts">
+    <div><dt>Full name</dt><dd>{{ me.full_name }}</dd></div>
+    <div><dt>Username</dt><dd>{{ me.username }}</dd></div>
+    <div><dt>E-mail</dt><dd>{{ me.email or '-' }}</dd></div>
+    <div><dt>Account type</dt><dd>{{ {'admin': 'Administrator', 'owner': 'Document owner', 'viewer': 'Viewer'}[me.role] }}</dd></div>
+    <div><dt>Joined (UTC)</dt><dd>{{ me.created_at.strftime('%Y-%m-%d') }}</dd></div>
+    <div><dt>Previous sign-in (UTC)</dt><dd>{{ last.at.strftime('%Y-%m-%d %H:%M') if last else 'This is your first sign-in' }}</dd></div>
+  </dl>
+</section>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Bin - TrustVault{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Bin</h1>
+  <p>Deleted documents are kept for {{ days }} days, then removed for good. You see details only, never contents. Press and hold a row to select several.</p></div></div>
+{% if docs %}
+<form id="restore-form" method="post" action="{{ url_for('admin_pages.bin_restore') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="bin-actions">
+    <button type="submit" name="all" value="1">Restore all</button>
+    <button type="submit" id="restore-selected" class="secondary" hidden>Restore selected</button>
+  </div>
+  <div class="table-wrap"><table>
+    <tr><th></th><th>Title</th><th>Owner</th><th>Deleted by</th><th>Deleted (UTC)</th><th>Days left</th><th></th></tr>
+    {% for d in docs %}<tr class="bin-row">
+      <td><input type="checkbox" name="ids" value="{{ d.id }}" aria-label="Select {{ d.title }}"></td>
+      <td>{{ d.title }}<div class="muted-small">{{ d.category }} · {{ d.size_bytes|filesizeformat }}</div></td>
+      <td>{{ d.owner_name }}</td><td>{{ d.deleted_by_name or '-' }}</td><td>{{ d.deleted_at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ d.days_left }}</td>
+      <td><button type="submit" name="one" value="{{ d.id }}" class="small secondary" formnovalidate>Restore</button></td>
+    </tr>{% endfor %}
+  </table></div>
+</form>
+<script src="{{ url_for('static', filename='bin.js') }}" defer></script>
+{% else %}<div class="empty">The bin is empty.</div>{% endif %}
+{% endblock %}

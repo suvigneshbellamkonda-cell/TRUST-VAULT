@@ -5,7 +5,7 @@ import pytest
 
 from helpers import give, login, make_doc, post, query, text, unique, active_grant_id
 
-SEARCH_STARTS_AT = "</form>"       # the results come after the last form on the page
+SEARCH_STARTS_AT = "<!-- results -->"       # the results come after this marker
 
 
 def results(response):

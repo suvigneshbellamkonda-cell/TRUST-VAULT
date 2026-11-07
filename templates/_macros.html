@@ -6,3 +6,41 @@
 {% macro person(name, small=False) -%}
 <span class="person"><span class="avatar light{{ ' small' if small }}">{{ user_icon() }}</span>{{ name }}</span>
 {%- endmacro %}
+
+{% macro icon(name) -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+{%- if name == 'home' %}<path d="M3 11l9-8 9 8v10H3z"/>
+{%- elif name == 'doc' %}<path d="M6 2h8l5 5v15H6z"/><path d="M14 2v5h5"/>
+{%- elif name == 'share' %}<circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 11l6-4M9 13l6 4"/>
+{%- elif name == 'star' %}<path d="M12 2l3 7 7 .6-5.3 4.6 1.7 7.3L12 17.8 5.6 21.5l1.7-7.3L2 9.6 9 9z"/>
+{%- elif name == 'user' %}<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/>
+{%- elif name == 'users' %}<circle cx="9" cy="8" r="3.5"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M17 4a3.5 3.5 0 0 1 0 7M22 21c0-3-2-5-4-5.5"/>
+{%- elif name == 'gear' %}<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>
+{%- elif name == 'log' %}<path d="M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"/>
+{%- elif name == 'bin' %}<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/>
+{%- elif name == 'audit' %}<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>
+{%- elif name == 'bell' %}<path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7"/><path d="M10 20a2 2 0 0 0 4 0"/>
+{%- elif name == 'tri' %}<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>
+{%- elif name == 'sun' %}<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/>
+{%- elif name == 'moon' %}<path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/>
+{%- elif name == 'check' %}<path d="M5 12l5 5 9-10"/>
+{%- elif name == 'up' %}<path d="M12 16V4M6 10l6-6 6 6M4 20h16"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}
+
+{% macro star_button(doc_id, on, next_url) -%}
+<form method="post" action="{{ url_for('documents.toggle_star', doc_id=doc_id) }}" class="inline star-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="next" value="{{ next_url }}">
+  <button type="submit" class="star-btn{{ ' on' if on }}" aria-label="{{ 'Remove star' if on else 'Add star' }}" title="{{ 'Remove star' if on else 'Add star' }}">
+    <svg viewBox="0 0 24 24" fill="{{ 'currentColor' if on else 'none' }}" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7 7 .6-5.3 4.6 1.7 7.3L12 17.8 5.6 21.5l1.7-7.3L2 9.6 9 9z"/></svg>
+  </button>
+</form>
+{%- endmacro %}
+
+{% macro back(fallback) -%}
+<a class="backlink" href="{{ fallback }}" data-back>&larr; Back</a>
+{%- endmacro %}
+
+{% macro filters_note() -%}{%- endmacro %}

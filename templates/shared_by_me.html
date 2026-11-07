@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Shared documents - TrustVault{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Shared documents</h1><p>The documents you shared with viewers, and who can see each one.</p></div></div>
+<form method="get" class="card filters">
+  <label>Viewer<input type="text" name="viewer" value="{{ viewer }}" maxlength="50" placeholder="Name or username"></label>
+  <label>Access
+    <select name="access"><option value="">All</option>
+      <option value="read" {{ 'selected' if access == 'read' }}>Can read</option>
+      <option value="edit" {{ 'selected' if access == 'edit' }}>Can edit</option>
+    </select></label>
+  <div class="filter-actions"><button type="submit">Filter</button></div>
+</form>
+{% if rows %}
+<div class="table-wrap"><table>
+  <tr><th>Document</th><th>Shared with</th><th>Access</th><th>Since (UTC)</th><th></th></tr>
+  {% for r in rows %}<tr>
+    <td><a href="{{ url_for('documents.view_document', doc_id=r.doc_id) }}">{{ r.title }}</a></td>
+    <td>{{ r.full_name }} <span class="muted">({{ r.username }})</span></td>
+    <td><span class="badge badge-{{ r.permission }}">{{ r.permission }}</span></td>
+    <td>{{ r.granted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td><form method="post" action="{{ url_for('documents.revoke_grant', doc_id=r.doc_id, grant_id=r.grant_id) }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+      <button type="submit" class="danger outline small">Revoke</button></form></td>
+  </tr>{% endfor %}
+</table></div>
+{% else %}<div class="empty">You have not shared any document yet. Open a document and use "Share with a viewer".</div>{% endif %}
+{% endblock %}
