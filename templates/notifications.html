@@ -12,12 +12,8 @@
     </form>
     {% endif %}
     <form method="post" action="{{ url_for('accounts.notifications_clear') }}" class="inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="which" value="read">
-      <button type="submit" class="secondary">Clear read</button>
-    </form>
-    <form method="post" action="{{ url_for('accounts.notifications_clear') }}" class="inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="which" value="all">
-      <button type="submit" class="danger outline">Clear all</button>
+      <button type="submit" class="danger outline">Clear notifications</button>
     </form>
   </div>
   {% endif %}
