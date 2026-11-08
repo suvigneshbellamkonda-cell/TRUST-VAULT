@@ -74,7 +74,7 @@ There is exactly one administrator and no registration page. To replace the admi
 ```
 python -m pytest -q
 ```
-The tests build a private schema (`tv_test`) and delete it afterwards; they never touch real data. 280 tests, including: every page and action for the administrator, an owner, a viewer and a visitor, one user cannot reach another's documents on any route, the audit chain detects tampering, invitations work once, OTP limits, the bin and its 15-day purge. (Against a remote database the full run is slow, about half an hour; against a local PostgreSQL it takes about 20 seconds.)
+The tests build a private schema (`tv_test`) and delete it afterwards; they never touch real data. over 280 tests, including: every page and action for the administrator, an owner, a viewer and a visitor, one user cannot reach another's documents on any route, the audit chain detects tampering, invitations work once, OTP limits, the bin and its 15-day purge. (Against a remote database the full run is slow, about half an hour; against a local PostgreSQL it takes about 20 seconds.)
 
 ## Other documents
 - `THREATS.md` - what could go wrong, what stops it, which test proves it, what is left over
