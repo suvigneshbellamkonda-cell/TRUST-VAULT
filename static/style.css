@@ -212,7 +212,7 @@ button:disabled { opacity: .7; cursor: default; }
    Day 6: sidebar layout, dark mode, tiles, notifications, bin, progress
    ===================================================================== */
 .shell { display: flex; min-height: 100vh; }
-.side { width: 250px; flex: none; background: var(--navy); color: #c3d1e8; padding: 20px 14px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.side { width: 250px; flex: none; background: var(--navy); color: #c3d1e8; padding: 20px 14px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; }
 .side .brand { padding: 4px 10px 18px; }
 .side nav a { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 8px; color: #c3d1e8; text-decoration: none; font-weight: 600; white-space: nowrap; }
 .side nav a svg { width: 20px; height: 20px; flex: none; }
@@ -307,3 +307,8 @@ button:disabled { opacity: .7; cursor: default; }
   .side .me, .side .grow { display: none; }
   .toprow { padding: 12px 16px 0; }
 }
+
+.side nav .logout-form { margin: 0; }
+.side nav .logout-form button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 14px; border: 0; border-radius: 8px; background: transparent; color: #c3d1e8; font: inherit; font-weight: 600; cursor: pointer; }
+.side nav .logout-form button:hover { background: var(--navy-hover); color: #fff; }
+.side nav .logout-form button svg { width: 20px; height: 20px; flex: none; }

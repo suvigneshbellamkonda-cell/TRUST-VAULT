@@ -36,13 +36,13 @@
       {% endif %}
       <a href="{{ url_for('accounts.profile') }}" class="{{ 'active' if ep == 'accounts.profile' }}">{{ icon('user') }}Profile</a>
       <a href="{{ url_for('accounts.settings') }}" class="{{ 'active' if ep == 'accounts.settings' }}">{{ icon('gear') }}Settings</a>
+      <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit">{{ icon('out') }}Log out</button>
+      </form>
     </nav>
     <div class="grow"></div>
     <div class="me"><b>{{ g.user.full_name }}</b>{{ {'admin': 'Administrator', 'owner': 'Document owner', 'viewer': 'Viewer'}[g.user.role] }}</div>
-    <form method="post" action="{{ url_for('logout') }}" class="logout-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit">Log out</button>
-    </form>
   </aside>
   <div class="content">
     <div class="toprow">

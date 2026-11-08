@@ -72,8 +72,9 @@ def test_logout_kills_a_copied_cookie(app, alice):
 
 
 def test_logout_needs_post_and_csrf(alice):
-    assert alice.get("/logout").status_code == 405
-    assert alice.post("/logout", data={}).status_code == 400
+    assert alice.get("/logout").status_code == 302                 # a GET never logs out
+    assert alice.get("/documents").status_code == 200              # still signed in
+    assert alice.post("/logout", data={}).status_code == 400       # POST without CSRF refused
 
 
 def test_disabling_a_user_ends_their_session_at_once(app, admin):

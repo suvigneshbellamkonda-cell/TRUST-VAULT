@@ -228,3 +228,28 @@ def test_the_success_message_does_not_promise_delivery(admin, monkeypatch):
         "csrf_token": csrf(admin), "full_name": "Maybe", "email": f"{unique('maybe')}@example.com"})
     page = text(response)
     assert "handed to the mail service" in page and "will not arrive" in page and "Invitation sent to" not in page
+
+
+def test_logging_out_works_for_a_viewer(app):
+    username, password = make_user(role="viewer")
+    client, _ = try_login(app, username, password, "10.8.9.1")
+    assert client.get("/").status_code == 200
+    assert post(client, "/logout").status_code == 302
+    assert client.get("/").status_code == 302
+
+
+@pytest.mark.parametrize("who", ["admin", "alice", "carol"])
+def test_sidebar_has_log_out_directly_below_settings(request, who):
+    html = person(request, who).get("/").get_data(as_text=True)
+    nav = html.split("<nav")[1].split("</nav>")[0]
+    assert nav.index("Settings</a>") < nav.index('action="/logout"') < nav.index("Log out")
+
+
+def test_opening_the_logout_address_directly_is_not_an_error(app):
+    username, password = make_user(role="viewer")
+    client, _ = try_login(app, username, password, "10.8.9.2")
+    assert client.get("/logout").status_code == 302
+    assert client.get("/").status_code == 200  # a GET did not log me out
+    post(client, "/logout")
+    after = client.get("/logout")
+    assert after.status_code == 302 and "/login" in after.headers["Location"]

@@ -170,6 +170,14 @@ def login():
     return redirect(url_for("home"))
 
 
+@app.route("/logout", methods=["GET"])
+def logout_page():
+    # Reloading, going Back, or an old bookmark lands here with a GET.
+    # A GET never logs anyone out (that would be forgeable); it just
+    # sends the visitor to the right place instead of "Method Not Allowed".
+    return redirect(url_for("home") if g.user else url_for("login"))
+
+
 @app.route("/logout", methods=["POST"])
 @login_required
 def logout():
